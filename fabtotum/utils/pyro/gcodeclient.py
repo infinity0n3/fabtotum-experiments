@@ -25,14 +25,14 @@ from threading import Event, Thread
 
 # Import external modules
 import Pyro4
-Pyro4.config.COMMTIMEOUT = 3
-Pyro4.config.MAX_RETRIES = 40
-Pyro4.config.LOGWIRE = True
+#~ Pyro4.config.COMMTIMEOUT = 20
+#Pyro4.config.MAX_RETRIES = 40
+#Pyro4.config.LOGWIRE = True
 #Pyro4.config.PYRO_LOGFILE = 'client.pyro.log'
 
 # Import internal modules
 from fabtotum.utils.singleton import Singleton
-from gcodeservice import PYRO_URI_FILE
+from fabtotum.utils.pyro.gcodeservice import PYRO_URI_FILE
 
 ###############################
 
@@ -42,10 +42,10 @@ class CallbackHandler:
     
     def do_callback(self, action, data):
         if action:
-            print "client: callback received (", action, data, ")"
+            #print "client: callback received (", action, data, ")"
             self.gc.do_callback(action, data)
    
-class GCodeServicePyroClient:
+class GCodeServiceClient:
     __metaclass__ = Singleton
     
     def __init__(self):
@@ -64,19 +64,19 @@ class GCodeServicePyroClient:
     
     def do_callback(self, action, data):
         if self.callback:
-            print 'calling callback'
+            #~ print 'calling callback'
             self.callback(action, data)
     
     def still_running(self):
         return self.running
     
     def __close(self):
-        print "client: stop"
+        #~ print "client: stop"
         self.running = False
         self.daemon.shutdown()
     
     def __register_callback(self, callback_fun):
-        print "client: register_callback"
+        #~ print "client: register_callback"
         
         if not self.daemon:
             self.daemon = Pyro4.Daemon()

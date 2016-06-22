@@ -37,6 +37,28 @@ from fabtotum.utils.gcodefile import GCodeFile
 
 #############################################
 
+ERROR_CODES = {
+    #error codes
+    '100' : 'ERROR_KILLED',
+    '101' : 'ERROR_STOPPED',
+    '102' : 'ERROR_DOOR_OPEN',
+    '103' : 'ERROR_MIN_TEMP',
+    '104' : 'ERROR_MAX_TEMP',
+    '105' : 'ERROR_MAX_BED_TEMP',
+    '106' : 'ERROR_X_MAX_ENDSTOP',
+    '107' : 'ERROR_X_MIN_ENDSTOP',
+    '108' : 'ERROR_Y_MAX_ENDSTOP',
+    '109' : 'ERROR_Y_MIN_ENDSTOP',
+    '110' : 'ERROR_IDLE_SAFETY',
+    #error codes for FABUI configurable functionalities
+    '120' : 'ERROR_Y_BOTH_TRIGGERED',
+    '121' : 'ERROR_Z_BOTH_TRIGGERED'
+}
+
+HOOKS = [
+    
+]
+
 class Command(object):
     
     NONE   = 'none'
@@ -103,26 +125,6 @@ class Command(object):
     def file(cls, filename):
         return cls(Command.FILE, filename)
 
-def is_valid_gcode_line(line):
-    pass
-
-ERROR_CODES = {
-    #error codes
-    '100' : 'ERROR_KILLED',
-    '101' : 'ERROR_STOPPED',
-    '102' : 'ERROR_DOOR_OPEN',
-    '103' : 'ERROR_MIN_TEMP',
-    '104' : 'ERROR_MAX_TEMP',
-    '105' : 'ERROR_MAX_BED_TEMP',
-    '106' : 'ERROR_X_MAX_ENDSTOP',
-    '107' : 'ERROR_X_MIN_ENDSTOP',
-    '108' : 'ERROR_Y_MAX_ENDSTOP',
-    '109' : 'ERROR_Y_MIN_ENDSTOP',
-    '110' : 'ERROR_IDLE_SAFETY',
-    #error codes for FABUI configurable functionalities
-    '120' : 'ERROR_Y_BOTH_TRIGGERED',
-    '121' : 'ERROR_Z_BOTH_TRIGGERED'
-}
 
 class GCodeService:
     __metaclass__ = Singleton
@@ -158,9 +160,14 @@ class GCodeService:
         self.active_cmd = None
         self.wait_for_cmd = None
         self.ev_tx_started = Event()
-        self.ev_tx_stopped = Event()
         self.ev_rx_started = Event()
-        self.ev_rx_stopped = Event()
+        
+        self.file_time_started = None
+        self.file_time_finished = None
+        self.idle_time_started = time.time()
+        self.progress = 100.0
+        self.current_line_number = 0
+        self.total_line_number = 0
         
         # Callback handler
         self.callback = None
@@ -177,11 +184,27 @@ class GCodeService:
         
         self.state = GCodeService.IDLE
         
-        #~ if 'file_done' in self.callbacks:
-            #~ self.callbacks['file_done']()
         if self.callback:
             self.callback('file_done', None)
-                        
+    
+    def __trigger_file_done(self, last_command):
+        callback_thread = Thread( 
+                target = self.__file_done_thread, 
+                args=( [last_command] ) 
+                )
+        callback_thread.start()
+        
+    def __callback_thread(self, callback_name, data):
+        if self.callback:
+            self.callback(callback_name, data)
+        
+    def __trigger_callback(self, callback_name, data):
+        callback_thread = Thread( 
+                target = self.__callback_thread, 
+                args=( [callback_name, data] ) 
+                )
+        callback_thread.start()
+    
     def __sender_thread(self):
         """
         Sender thread used to send commands to Totumduino.
@@ -197,37 +220,55 @@ class GCodeService:
 
             if cmd == Command.GCODE:
                 self.serial.write(cmd.data + '\r\n')
-                #print "@ >>", cmd.data
+                print "G <<", cmd.data
                 self.rq.put(cmd)
             elif cmd == Command.FILE:
                 filename = cmd.data
                 last_command = None
                 aborted = False
+                first_move = False
                 
                 self.state = GCodeService.FILE
-                
-                #with open(filename, 'r+') as file:
-                
+                self.progress = 0.0
                 # TODO: try except protection
                 
                 gfile = GCodeFile(filename)
                 
+                print gfile.info
+                
+                self.total_line_number = gfile.info['line_count']
+                self.current_line_number = 0
+                
                 for line, attrs in gfile:
                     line = line.rstrip()
-                    print "L >> ", line
-                    # TODO: process comments
+                    print "L << ", line
+                    
+                    if attrs:
+                        self.__trigger_callback('process_comment', attrs)
+                    
+                    #~ for hook in HOOKS:
+                        #~ trigger, callback_name, callback_data = hook.process_command()
+
+                    if not first_move:
+                        if line[:2] == 'G0' or line[:2] == 'G1':
+                            self.__trigger_callback('first_move', None)
+                            first_move = True
+                    
+                    self.current_line_number += 1
+                    
+                    self.progress = 100 * float(self.current_line_number) / float(self.total_line_number)
                     
                     if line:
-                        
                         # QUESTION: should this be handled or not?
-                        if line == 'M25':
-                            self.pause()
-                        elif line == 'M24':
-                            self.resume()
-                        else:
-                            self.serial.write(line + '\r\n')
-                            last_command = Command.gcode(line, 'ok')
-                            self.rq.put(last_command)
+                        #~ if line == 'M25':
+                            #~ self.pause()
+                        #~ elif line == 'M24':
+                            #~ self.resume()
+                        #~ else:
+
+                        self.serial.write(line + '\r\n')
+                        last_command = Command.gcode(line, 'ok')
+                        self.rq.put(last_command)
                         
                         try:
                             cmd = self.cq.get_nowait()
@@ -268,16 +309,11 @@ class GCodeService:
                 # Create a new thread that is waiting for the last command 
                 # to get it's reply and call the callback function if one
                 # was specified.
-                callback_thread = Thread( 
-                        target = self.__file_done_thread, 
-                        args=( [last_command] ) 
-                        )
-                callback_thread.start()
+                self.__trigger_file_done(last_command)
                 
             elif cmd == Command.KILL:
                 break
                 
-        self.ev_tx_stopped.set()
         print "sender thread: stopped"
     
     def __handle_line(self, line_raw):
@@ -292,10 +328,11 @@ class GCodeService:
             print e
             return
         
-        print "@ <<", line
-        
         if not line:
             return
+            
+        # Update idle time start
+        self.idle_time_started = time.time()
         
         # If there is no active command try to get it from the reply queue
         if not self.active_cmd:
@@ -303,7 +340,9 @@ class GCodeService:
                 self.active_cmd = self.rq.get()
                 #print 'active-cmd:', self.active_cmd
             except queue.Empty as e:
-                print e
+                print "Queue is EMPTY", e
+        
+        print "@ >>", line, self.active_cmd
         
         if self.active_cmd:
             # Get the active command as this is the on waiting for the reply.
@@ -343,7 +382,7 @@ class GCodeService:
         
         if not hasattr(self.serial, 'cancel_read'):
             self.serial.timeout = 1
-            print "has not cancel_read"
+            print "has no cancel_read"
         
         self.ev_rx_started.set()
         
@@ -361,16 +400,13 @@ class GCodeService:
             else:
                 if data:
                     self.buffer.extend(data)
+                    #~ print 'R: [', data, ']'
                     while self.READ_TERM in self.buffer:
                         line_raw, self.buffer = self.buffer.split(self.READ_TERM, 1)
                         self.__handle_line(line_raw)
-                        if self.rq.empty():
-                            self.wait_for_reply = False
-                            break
-
         
-        self.ev_rx_stopped.set()
         print "receiver thread: stopped"
+    
     
     """ APIs *public* functions """
     
@@ -513,3 +549,9 @@ class GCodeService:
         if self.running:
             cmd = Command.file(filename)
             self.cq.put(cmd)
+            
+    def get_progress(self):
+        return self.progress
+        
+    def get_idle_time(self):
+        return self.idle_time_started - time.time()

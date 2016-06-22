@@ -92,8 +92,8 @@ class GCodeFile:
         """
         parser = None
         if 'slicer' in self.info:
-            if slicer.info['slicer'] in EXTERNALS:
-                parser = EXTERNALS[ slicer.info['slicer'] ]
+            if self.info['slicer'] in EXTERNALS:
+                parser = EXTERNALS[ self.info['slicer'] ]
         return GCodeFileIter(self.info['filename'], parser)
 
     def process_file(self, filename):
@@ -135,4 +135,4 @@ class GCodeFile:
         if not layer_count and gcode_type == GCodeInfo.PRINT and max_layer > 0:
             self.info['layer_count'] = max_layer
         
-        self.info['count'] = count
+        self.info['line_count'] = count
