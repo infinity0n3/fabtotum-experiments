@@ -33,7 +33,7 @@ from fabtotum.totumduino.gcode import GCodeService
 PYRO_URI_FILE = '/run/gcodeservice.uri'
 GCS = None
 
-class GCodeServicePyroServer:
+class GCodeServicePyroServer(object):
     def __init__(self):
         print "New GCodeService Wrapper"
         self.client_callback = None

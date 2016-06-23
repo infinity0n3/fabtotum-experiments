@@ -45,7 +45,7 @@ class CallbackHandler:
             #print "client: callback received (", action, data, ")"
             self.gc.do_callback(action, data)
    
-class GCodeServiceClient:
+class GCodeServiceClient(object):
     __metaclass__ = Singleton
     
     def __init__(self):

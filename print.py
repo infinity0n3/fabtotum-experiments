@@ -18,6 +18,18 @@
 # You should have received a copy of the GNU General Public License
 # along with FABUI.  If not, see <http://www.gnu.org/licenses/>.
 
+# Import standard python module
+import argparse
+import time
+
+import gettext
+
+# Import external modules
+from watchdog.observers import Observer
+from watchdog.events import PatternMatchingEventHandler
+
+# Import internal modules
+from fabtotum.fabui.config import ConfigService
 from gpusher_new import GCodePusherApplication
 
 
@@ -47,10 +59,20 @@ ext_temp_target = args.ext_temp     # EXTRUDER TARGET TEMPERATURE (previously re
 bed_temp        = 0.0
 bed_temp_target = args.bed_temp     # BED TARGET TEMPERATURE (previously read from file) 
 
-GCodePusherApplication(gcode_file, command_file, task_id, monitor_file, log_trace,
-                ext_temp, ext_temp_target, bed_temp, bed_temp_target)
+################################################################################
 
-app = GCodePusherApplication()
+class PrintApplication(GCodePusherApplication):
+    
+    def __init__(self, command_file, monitor_file, log_trace):
+        super(PrintApplication, self).__init__(command_file, monitor_file, log_trace)
+    
+    def first_move_callback(self):
+        print "Print stared"
+    
+    def temp_change_callback(self, action, data):
+        print action, data
 
 
-app.run()
+app = PrintApplication(command_file, monitor_file, log_trace)
+
+app.run(gcode_file, task_id, ext_temp, ext_temp_target, bed_temp, bed_temp_target)
