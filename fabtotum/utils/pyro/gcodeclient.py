@@ -57,7 +57,6 @@ class GCodeServiceClient:
  
         with open(PYRO_URI_FILE, 'r') as file:
             uri = file.read()
-            print uri
             self.server = Pyro4.Proxy(uri)
         #~ uri = 'PYRO:GCodeService@localhost:9999'
         #~ self.server = Pyro4.Proxy(uri)
@@ -73,7 +72,8 @@ class GCodeServiceClient:
     def __close(self):
         #~ print "client: stop"
         self.running = False
-        self.daemon.shutdown()
+        if self.daemon:
+            self.daemon.shutdown()
     
     def __register_callback(self, callback_fun):
         #~ print "client: register_callback"
@@ -86,10 +86,10 @@ class GCodeServiceClient:
         self.server.register_callback('<pyro_callback>', self.uri.asString())
     
     def __loop(self):
-        print "client: loop"
+        #print "client: loop"
         self.daemon.requestLoop(loopCondition=self.still_running)
         self.daemon.close()
-        print "client: loop end"
+        #print "client: loop end"
     
     def __getattr__(self, attr):            
         if attr == 'register_callback':

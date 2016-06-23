@@ -25,7 +25,10 @@ import re
 import json
 import argparse
 import time
+import logging
 from threading import Event, Thread, RLock
+
+import gettext
 
 # Import external modules
 from watchdog.observers import Observer
@@ -36,53 +39,53 @@ from fabtotum.fabui.config import ConfigService
 from fabtotum.utils.gcodefile import GCodeFile
 from fabtotum.utils.pyro.gcodeclient import GCodeServiceClient
 
+# Set up message catalog access
+tr = gettext.translation('gpusher', 'locale', fallback=True)
+_ = tr.ugettext
 
 ################################################################################
 def parse_temperature(line):
-    temperature_match = re.search('ok\sT:([0-9]+\.[0-9]+)\s\/([0-9]+\.[0-9]+)\sB:([0-9]+\.[0-9]+)\s\/([0-9]+\.[0-9]+)\s', line)
-    if temperature_match != None:
-        return float(temperature_match.group(1)) \
-            ,  float(temperature_match.group(2)) \
-            ,  float(temperature_match.group(3)) \
-            ,  float(temperature_match.group(4))
+    match = re.search('ok\sT:(?P<T>[0-9]+\.[0-9]+)\s\/(?P<TT>[0-9]+\.[0-9]+)\sB:(?P<B>[0-9]+\.[0-9]+)\s\/(?P<BT>[0-9]+\.[0-9]+)\s', line)
+    if match:
+        return ( match.group('T'), match.group('TT'), match.group('B'), match.group('BT') )
 
 def writeMonitor(filename, info):
     """
     Write stats to monitor file
     """    
     _layers =   {
-                'total' : info['layer_count'], 
-                'actual': info['current_layer']
+                'total' : str(info['layer_count']), 
+                'actual': str(info['current_layer'])
                 }
                 
     _stats  =   {
-                "percent"           : info['progress'],
-                "line_number"       : info['current_line_number'],
-                "extruder"          : info['ext_temp'],
-                "bed"               : info['ext_temp_target'],
-                "extruder_target"   : info['bed_temp'],
-                "bed_target"        : info['bed_temp_target'] ,
-                "z_override"        : info['z_override'],
-                "layers"            : info['layer_count'],
-                "fan"               : info['fan'],
-                "speed"             : info['speed'],
-                "flow_rate"         : info['flow_rate']
+                "percent"           : str(info['progress']),
+                "line_number"       : str(info['current_line_number']),
+                "extruder"          : str(info['ext_temp']),
+                "bed"               : str(info['bed_temp']),
+                "extruder_target"   : str(info['ext_temp_target']),
+                "bed_target"        : str(info['bed_temp_target'] ),
+                "z_override"        : str(info['z_override']),
+                "layers"            : str(info['layer_count']),
+                "fan"               : str(info['fan']),
+                "speed"             : str(info['speed']),
+                "flow_rate"         : str(info['flow_rate'])
                 }
-                
+                 
     _tip    =   {
-                "show"              : info['tip'],
-                "message"           : info['message']
+                "show"              : str(info['tip']),
+                "message"           : str(info['message'])
                 }
-                
+                 
     _print  =   {
-                "name"              : info["gcode_info"]["filename"],
-                "lines"             : info["gcode_info"]["line_count"],
-                "print_started"     : "", #str(print_started),
-                "started"           : "", #str(started),
-                "paused"            : "", #str(paused),
-                "completed"         : info["completed"],
-                "completed_time"    : info["completed_time"],
-                "shutdown"          : "", #str(shutdown),
+                "name"              : str(info["gcode_info"]["filename"]),
+                "lines"             : str(info["gcode_info"]["line_count"]),
+                "print_started"     : str(info["print_started"]),
+                "started"           : str(info["started"]),
+                "paused"            : str(info["paused"]),
+                "completed"         : str(info["completed"]),
+                "completed_time"    : str(info["completed_time"]),
+                "shutdown"          : str(info["auto_shutdown"]),
                 "tip"               : _tip,
                 "stats"             : _stats
                 }
@@ -111,8 +114,30 @@ def GCodePusherApplication(
     GCode pusher application.
     """
     
+    ''' WRITE TO TRACE FILE '''
+    def trace(log_msg):
+        logging.info(log_msg)
+        print log_msg
+        
+    ''' RESET LOG TRACE to avoid annoing verbose '''
+    def resetTrace():
+        with open(log_trace, 'w'):
+            pass
+    
+    def shutdown_procedure(gcs):
+        trace( _("Schutting down...") )
+        # Wait for all commands to be finished
+        reply = gcs.send('M400')
+        # Tell totumduino Raspberry is going to sleep :'(
+        reply = gcs.send('M729')
+        # Stop the GCodeService connection
+        gcs.stop()
+        
+        # TODO: trigger system shutdown
+        
+    
     def first_move_callback(gcs):
-        print "First move"
+        trace( _("Print Started") )
         
         monitor_lock.acquire()
         monitor_info['print_started'] = True
@@ -124,26 +149,105 @@ def GCodePusherApplication(
             monitor_info['current_layer'] = data['layer']
         monitor_lock.release()
 
-    def gcode_action_callback(gcs, data):
-        print "GCode action", data
+    def temp_change_callback(gcs, action, data):
         monitor_lock.acquire()
+        
+        if action == 'all':
+            #print "Ext: {0}, Bed: {1}".format(data[0], data[1])
+            monitor_info['ext_temp'] = float(data[0])
+            monitor_info['bed_temp'] = float(data[1])
+        elif action == 'bed':
+            #print "Bed: {0}".format(data[0])
+            monitor_info['bed_temp'] = float(data[0])
+        elif action == 'ext':
+            #print "Ext: {0}".format(data[0])
+            monitor_info['ext_temp'] = float(data[0])
+            
         monitor_lock.release()
+        
+        writeMonitor(monitor_file, monitor_info)
+        
+    def gcode_action_callback(gcs, action, data):
+        #print _("GCode action"), data
+        
+        monitor_lock.acquire()
+        
+        if action == 'heating':
+            
+            
+            if data[0] == 'M109':
+                trace( _("Wait for nozzle temperature to reach {0}&deg;C").format(data[1]) )
+                monitor_info['ext_temp_target'] = float(data[1])
+            elif data[0] == 'M190':
+                trace( _("Wait for bed temperature to reach {0}&deg;C").format(data[1]) )
+                monitor_info['bed_temp_target'] = float(data[1])
+            elif data[0] == 'M104':
+                trace( _("Nozzle temperature set to {0}&deg;C").format(data[1]) )
+                monitor_info['ext_temp_target'] = float(data[1])
+            elif data[0] == 'M140':
+                trace( _("Bed temperature set to {0}&deg;C").format(data[1]) )
+                monitor_info['bed_temp_target'] = float(data[1])
+            
+        elif action == 'cooling':
+            if data[0] == 'M106':
+                value = int((float( data[1] ) / 255) * 100)
+                trace( _("Fan value set to {0}%").format(value) )
+            elif data[0] == 'M107':
+                trace( _("Fan off") )
+            
+        elif action == 'printing':
+            pass
+            
+        elif action == 'message':
+            print "MSG: {0}".format(data)
+
+        monitor_lock.release()
+        
+        writeMonitor(monitor_file, monitor_info)
 
     def file_done_callback(gcs, data):
-        monitor_lock.acquire()
-        monitor_info["completed"] = True
-        monitor_lock.release()
-        gcs.stop()
+        print _("File Done")
         
+        monitor_lock.acquire()
+        
+        monitor_info["completed_time"] = int(time.time())
+        monitor_info["completed"] = True        
+        monitor_info['progress'] = 100.0 #gcs.get_progress()
+        writeMonitor(monitor_file, monitor_info)
+        
+        monitor_lock.release()
+        
+        if monitor_info["auto_shutdown"]:
+            shutdown_procedure(gcs)
+        else:
+            gcs.stop()
+    
+    def state_change_callback(data):
+        monitor_lock.acquire()
+        
+        if data == 'paused':
+            trace( _("Print is now paused") )
+            monitor_info["paused"] = True
+        elif data == 'resumed':
+            monitor_info["paused"] = False
+            
+        monitor_lock.release()
+        
+        writeMonitor(monitor_file, monitor_info)
+    
     def callback_handler(action, data):
         if action == 'file_done':
             file_done_callback(gcs, data)
         elif action == 'gcode_comment':
             gcode_comment_callback(gcs, data)
-        elif action == 'gcode_action':
-            gcode_action_callback(gcs, data)
+        elif action.startswith('gcode_action'):
+            gcode_action_callback(gcs, action.split(':')[1], data)
         elif action == 'first_move':
             first_move_callback(gcs)
+        elif action.startswith('temp_change'):
+            temp_change_callback(gcs, action.split(':')[1], data)
+        elif action == 'state_change':
+            state_change_callback(gcs)
 
     def temperature_monitor_thread(gcs):
         while gcs.still_running():
@@ -154,12 +258,16 @@ def GCodePusherApplication(
             monitor_lock.acquire()
             
             if reply:
-                monitor_info['ext_temp'],
-                monitor_info['ext_temp_target'],
-                monitor_info['bed_temp'],
-                monitor_info['bed_temp_target'] = parse_temperature(reply[0])
+                #print reply
+                a, b, c, d = parse_temperature(reply[0])
+                monitor_info['ext_temp'] = a
+                monitor_info['ext_temp_target'] = b
+                monitor_info['bed_temp'] = c
+                monitor_info['bed_temp_target'] = d
             
             monitor_info['progress'] = gcs.get_progress()
+            
+            #print monitor_info['ext_temp'], monitor_info['progress']
             
             monitor_lock.release()
             
@@ -167,6 +275,29 @@ def GCodePusherApplication(
             
             time.sleep(1)
             
+    ''' WATCHDOG CLASS HANDLER FOR DATA FILE COMMAND '''
+    class OverrideCommandsHandler(PatternMatchingEventHandler):
+        backtrack = []
+        
+        def catch_all(self, event, op):
+            if event.is_directory:
+                return
+                
+            if(event.src_path == command_file):
+                with open(event.src_path) as f:
+                    for line in f:
+                        c = line.rstrip()
+                        if not c in ovr_cmd and c != "": 
+                            ovr_cmd.append(c)
+                            #~ if c=="!kill":
+                                #~ killed=True
+                                #~ EOF=True
+                                
+                open(event.src_path, 'w').close()
+                
+        def on_modified(self, event):
+            self.catch_all(event, 'MOD')
+          
     # Application body
     gcs = GCodeServiceClient()
 
@@ -179,6 +310,10 @@ def GCodePusherApplication(
 
     monitor_info = {
         "progress"              : 0.0,
+        "paused"                : False,
+        "print_started"         : False,
+        "started"               : time.time(),
+        "auto_shutdown"         : False,
         "completed"             : False,
         "completed_time"        : 0,
         "layer_count"           : 0,
@@ -199,17 +334,27 @@ def GCodePusherApplication(
         "gcode_info"            : gfile.info
     }
 
+    logging.basicConfig( filename=log_trace, level=logging.INFO, format='%(message)s')
+    resetTrace()
+
     monitor_lock = RLock()
 
     temperature_monitor = Thread(target=temperature_monitor_thread, args=[gcs] )
     temperature_monitor.start()
+    
+    event_handler = OverrideCommandsHandler(patterns=[command_file])
+    observer = Observer()
+    observer.schedule(event_handler, '/var/www/tasks/', recursive=True)
+    observer.start()
 
     gcs.register_callback(callback_handler)
 
     gcs.send_file(gcode_file)
 
     gcs.loop()
+    observer.stop()
     temperature_monitor.join()
+    observer.join()
     
 def main():
     config = ConfigService()

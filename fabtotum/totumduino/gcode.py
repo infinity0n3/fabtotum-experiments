@@ -21,6 +21,7 @@
 
 # Import standard python module
 import time
+import re
 from threading import Event, Thread
 try:
     import queue
@@ -34,6 +35,7 @@ import serial
 from fabtotum.os.config import UART_PORT_NAME, UART_BAUD_RATE
 from fabtotum.utils.singleton import Singleton
 from fabtotum.utils.gcodefile import GCodeFile
+from fabtotum.totumduino.hooks import action_hook
 
 #############################################
 
@@ -56,7 +58,7 @@ ERROR_CODES = {
 }
 
 HOOKS = [
-    
+    action_hook
 ]
 
 class Command(object):
@@ -69,12 +71,13 @@ class Command(object):
     RESUME = 'resume'
     KILL   = 'kill'
     
-    def __init__(self, id, data = None, expected_reply = 'ok'):
+    def __init__(self, id, data = None, expected_reply = 'ok', group = 'raw'):
         self.id = id
         self.data = data
         self.reply = []
         self.ev = Event()
         self.expected_reply = expected_reply
+        self.group = group
 
     def __str__(self):
         msg = 'cmd: ' + self.id
@@ -94,6 +97,9 @@ class Command(object):
     
     def notify(self):
         self.ev.set()
+        
+    def wait(self, timeout = None):
+        self.ev.wait(timeout)
         
     def hasExpectedReply(self, line):
         return line[:len(self.expected_reply)] == self.expected_reply;
@@ -118,12 +124,12 @@ class Command(object):
         return cls(Command.RESUME, None)
 
     @classmethod
-    def gcode(cls, code, expected_reply):
-        return cls(Command.GCODE, code, expected_reply)
+    def gcode(cls, code, expected_reply, group = 'gcode'):
+        return cls(Command.GCODE, code, expected_reply, group)
 
     @classmethod
     def file(cls, filename):
-        return cls(Command.FILE, filename)
+        return cls(Command.FILE, filename, 'file')
 
 
 class GCodeService:
@@ -136,10 +142,10 @@ class GCodeService:
     
     WRITE_TERM   = b'\r\n'
     READ_TERM    = b'\n'
-    ENCODING = 'ascii'
+    ENCODING = 'utf-8'
     UNICODE_HANDLING = 'replace'
     
-    REPLY_QUEUE_SIZE = 8
+    REPLY_QUEUE_SIZE = 1
     
     def __init__(self, serial_port = UART_PORT_NAME, serial_baud = UART_BAUD_RATE):
         self.running = True
@@ -169,6 +175,8 @@ class GCodeService:
         self.current_line_number = 0
         self.total_line_number = 0
         
+        self.group_ack = {'gcode' : 0, 'file' : 0}
+        
         # Callback handler
         self.callback = None
     
@@ -181,6 +189,8 @@ class GCodeService:
         """
         print "waiting for last_command", last_command
         last_command.ev.wait()
+        
+        self.progress = 100.0
         
         self.state = GCodeService.IDLE
         
@@ -205,6 +215,28 @@ class GCodeService:
                 )
         callback_thread.start()
     
+    def __send_gcode_command(self, code, expected_reply = 'ok', group = 'gcode'):
+        
+        if isinstance(code, str):
+            gcode_raw = code
+            gcode_command = Command.gcode(gcode_raw, expected_reply, group)
+        elif isinstance(code, Command):
+            gcode_raw = code.data + '\r\n'
+            gcode_command = code
+        else:
+            print "Unknown command"
+            raise AttributeError
+        
+        for hook in HOOKS:
+            trigger, callback_name, callback_data = hook.process_command(gcode_raw)
+            if trigger:
+                self.__trigger_callback(callback_name, callback_data)
+        
+        self.serial.write(gcode_raw)
+        self.rq.put(gcode_command)
+        
+        return gcode_command
+
     def __sender_thread(self):
         """
         Sender thread used to send commands to Totumduino.
@@ -219,9 +251,9 @@ class GCodeService:
             cmd = self.cq.get()
 
             if cmd == Command.GCODE:
-                self.serial.write(cmd.data + '\r\n')
+                self.__send_gcode_command(cmd)
                 print "G <<", cmd.data
-                self.rq.put(cmd)
+                
             elif cmd == Command.FILE:
                 filename = cmd.data
                 last_command = None
@@ -234,10 +266,12 @@ class GCodeService:
                 
                 gfile = GCodeFile(filename)
                 
-                print gfile.info
-                
                 self.total_line_number = gfile.info['line_count']
                 self.current_line_number = 0
+                
+                gcode_count = self.total_line_number = gfile.info['gcode_count']
+                
+                self.group_ack['file'] = 0
                 
                 for line, attrs in gfile:
                     line = line.rstrip()
@@ -246,9 +280,6 @@ class GCodeService:
                     if attrs:
                         self.__trigger_callback('process_comment', attrs)
                     
-                    #~ for hook in HOOKS:
-                        #~ trigger, callback_name, callback_data = hook.process_command()
-
                     if not first_move:
                         if line[:2] == 'G0' or line[:2] == 'G1':
                             self.__trigger_callback('first_move', None)
@@ -256,7 +287,8 @@ class GCodeService:
                     
                     self.current_line_number += 1
                     
-                    self.progress = 100 * float(self.current_line_number) / float(self.total_line_number)
+                    #~ self.progress = 100 * float(self.current_line_number) / float(self.total_line_number)
+                    self.progress = 100 * float(self.group_ack['file']) / float(gcode_count)
                     
                     if line:
                         # QUESTION: should this be handled or not?
@@ -265,20 +297,30 @@ class GCodeService:
                         #~ elif line == 'M24':
                             #~ self.resume()
                         #~ else:
-
-                        self.serial.write(line + '\r\n')
-                        last_command = Command.gcode(line, 'ok')
-                        self.rq.put(last_command)
+                        
+                        last_command = self.__send_gcode_command(line + '\r\n', group='file')
+                        
+                        # Wait until reply received M109 M190 G28 
+                        if ( line[:4] == 'M109' or
+                             line[:4] == 'M190' or
+                             line[:3] == 'G28'):
+                            """ Wait for reply before continuing """
+                            last_command.wait()
                         
                         try:
                             cmd = self.cq.get_nowait()
                             
                             if cmd == Command.GCODE:
-                                self.serial.write(cmd.data + '\r\n')
-                                #print "# >>", cmd.data
-                                self.rq.put(cmd)
+                                #~ self.serial.write(cmd.data + '\r\n')
+                                #~ #print "# >>", cmd.data
+                                #~ self.rq.put(cmd)
+                                
+                                self.__send_gcode_command(cmd)
+                                
                             elif cmd == Command.PAUSE:
                                 self.state = GCodeService.PAUSED
+                                
+                                self.__trigger_callback('state_change', 'paused')
                                 
                                 while self.running:
                                     cmd = self.cq.get()
@@ -287,6 +329,7 @@ class GCodeService:
                                         self.rq.put(cmd)
                                     elif cmd == Command.RESUME:
                                         self.state = GCodeService.FILE
+                                        self.__trigger_callback('state_change', 'resumed')
                                         break
                                     elif cmd == Command.ABORT or cmd == Command.KILL:
                                         break
@@ -295,10 +338,12 @@ class GCodeService:
                                 # during PAUSE it will exit that loop and the
                                 # command will be processed.
                                 if cmd == Command.ABORT or cmd == Command.KILL:
+                                    self.__trigger_callback('state_change', 'aborted')
                                     aborted = True
                                     break
                                 
                             elif cmd == Command.ABORT or cmd == Command.KILL:
+                                self.__trigger_callback('state_change', 'aborted')
                                 aborted = True
                                 break
                                 
@@ -348,11 +393,11 @@ class GCodeService:
             # Get the active command as this is the on waiting for the reply.
             cmd = self.active_cmd
             cmd.reply.append( line )
-            
             # TODO: handle 'Resend' and/or errors
             # If this line contains the expected reply consider that the complete
             # reply is received and notify the sender of this.
             if cmd.hasExpectedReply(line):
+                
                 
                 if cmd.reply[0][:5] == 'ERROR':
                     #print "Fuck, error", cmd, cmd.reply
@@ -369,10 +414,52 @@ class GCodeService:
                     return
                     
                 cmd.notify()
+                
+                #self.group_ack = {}
+                group = self.active_cmd.group
+                if group:
+                    count = 1
+                    if group in self.group_ack:
+                        count = self.group_ack[group]
+
+                    count += 1
+                        
+                    self.group_ack[group] = count
+                    
+                    print "group_ack", group, count
+                
                 self.active_cmd = None
                 
-                #print cmd, cmd.reply
+            # Line does not contain expected reply
+            else:
+                
+                if cmd.data[:4] == 'M109': # Extruder
+                    # T:27.4 E:0 W:?
+                    #print "=== M109 [{0}]".format(line)
+                    temps = line.split()
+                    T = temps[0].replace("T:","").strip()
                     
+                    #~ match = re.search('T:(?P<T>[0-9.]+)\sE:(?P<E>[0-9.]+)\sB:(?P<B>[0-9.]+)\s', line)
+                    #~ print match
+                    #~ if match:
+                        #~ T = match.group('T')
+                        #~ B = match.group('B')
+                    #print "self.__trigger_callback('temp_change:ext', [{0}])".format(T)
+                    self.__trigger_callback('temp_change:ext', [T])
+                        
+                        
+                elif cmd.data[:4] == 'M190': # Bed
+                    # @ >> T:27.38 E:0 B:54.9
+                    #print "=== M190 [{0}]".format(line)
+                    
+                    temps = line.split()
+                    T = temps[0].replace("T:","").strip()
+                    B = temps[2].replace("B:","").strip()
+                    #~ match = re.search('T:(?P<T>[0-9.]+)\sE:(?P<E>[0-9.]+)\sW:(?P<W>[0-9.?]+)', line)
+                    #~ print match
+                    #~ if match:
+                        #~ T = match.group('T')
+                    self.__trigger_callback('temp_change:all', [T,B])
     
     def __receiver_thread(self):
         """

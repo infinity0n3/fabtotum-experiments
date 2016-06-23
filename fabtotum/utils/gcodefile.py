@@ -102,6 +102,7 @@ class GCodeFile:
         This information include gcode type, code count, layer count...
         """
         count = 0
+        gcode_count = 0
         max_layer = 0
         layer_count = 0
         slicer = None
@@ -132,7 +133,12 @@ class GCodeFile:
                         if layer > max_layer:
                             max_layer = layer
         
+                tags = line.strip().split(';')
+                if tags[0]:
+                    gcode_count += 1
+        
         if not layer_count and gcode_type == GCodeInfo.PRINT and max_layer > 0:
             self.info['layer_count'] = max_layer
         
         self.info['line_count'] = count
+        self.info['gcode_count'] = gcode_count
