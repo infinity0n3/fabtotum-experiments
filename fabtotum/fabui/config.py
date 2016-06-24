@@ -26,7 +26,7 @@ import ConfigParser
 # Import external modules
 
 # Import internal modules
-from fabtotun.os.paths        import CONFIG_INI, SERIAL_INI
+from fabtotum.os.paths        import CONFIG_INI, SERIAL_INI
 from fabtotum.utils.singleton import Singleton
 
 #####################################################
@@ -39,7 +39,7 @@ class ConfigService:
     def __init__(self):
         """ LOAD INI FILE """
         self.config = ConfigParser.ConfigParser()
-        self.config.read(INI_FILE)
+        self.config.read(CONFIG_INI)
 
         self.serialconfig = ConfigParser.ConfigParser()
         self.serialconfig.read(SERIAL_INI)

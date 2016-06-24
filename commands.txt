@@ -1,0 +1,11 @@
+!kill
+!pause
+!resume
+!z_plus:<float>
+!z_minus:<float>
+!shutdown:<on|off>
+!speed:<float>
+!fan:<int>
+!flow_rate:<float>
+!gcode:<gcode>
+!file:<filename>

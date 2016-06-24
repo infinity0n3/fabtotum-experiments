@@ -1,7 +1,7 @@
 #!/bin/env python
 # -*- coding: utf-8; -*-
 #
-# (c) 2015 FABtotum, http://www.fabtotum.com
+# (c) 2016 FABtotum, http://www.fabtotum.com
 #
 # This file is part of FABUI.
 #
@@ -42,7 +42,6 @@ class GCodeServiceServerPyroWrapper(object):
         self.callback_list = []
     
     def send(self, code, expected_reply = 'ok', block = True, timeout = None):
-        #global GCS
         return self.gcs.send(code.encode('latin-1'), expected_reply.encode('latin-1'), block, timeout)
         
     def send_file(self, filename):
@@ -99,7 +98,7 @@ class GCodeServiceServer(object):
         self.wrapper = wrapper
         self.uri = uri
         
-        # Write pyro uri to a file
+        # Write pyro_uri to a file
         with open(PYRO_URI_FILE, 'w') as file:
             file.write(uri.asString())
 
