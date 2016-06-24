@@ -20,12 +20,24 @@ gcs = GCodeServiceClient()
 #~ reply = gcs.send('M119')
 #~ print reply
 
-print gcs.send('M744')
-print gcs.send('M742')
+data = gcs.send('M503')
+#data = "".join(data, "\n")
+#z_probe_old = float(data.split("Z Probe Length: ")[1].split("\n")[0])
+
+for line in data:
+    if line.startswith("echo:Z Probe Length:"):
+        print line.split("Z Probe Length: ")[1]
+
+#print "z_probe_old",z_probe_old
+print "-------------"
+data = gcs.send('M114')
+data = data[0]
+z_touch = float(data.split("Z:")[1].split(" ")[0])
+print z_touch
 
 #~ gcs.register_callback(callback_function)
 
 #~ gcs.send_file('test_short.gcode')
 #~ gcs.send_file('fake_cura.gcode')
 
-#~ gcs.loop()
+gcs.loop()

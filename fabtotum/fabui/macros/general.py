@@ -48,7 +48,14 @@ def home_all(app, args):
 
 def start_up(app, args):
     
-    color = app.config.get('units', 'color')
+    try:
+        color = app.config.get('units', 'color')
+    except KeyError:
+        color = {
+            'r' : 255,
+            'g' : 255,
+            'b' : 255,
+        }
     
     try:
         safety_door = app.config.get('units', 'safety')['door']
@@ -119,3 +126,32 @@ def probe_down(app, args):
     
 def probe_up(app, args):
     app.macro("M402",   "ok", 1, _("Probe Up"), 0)
+
+def safe_zone(app, args):
+    app.send("G91")
+    app.send("G0 E-5 F1000")
+    app.send("G0 Z+1 F1000")
+    app.send("G90")
+    app.send("G27 Z0")
+    app.send("G0 X210 Y210")
+
+def engage_4axis(app, args):
+    units_a = app.config.get('units', 'a')
+    try:
+        feeder_disengage_offset = app.config.get('units', 'feeder')['disengage-offset']
+    except KeyError:
+        feeder_disengage_offset = 2
+    
+    app.trace( _("Engaging 4th Axis") )
+    app.macro("G27",                "ok", 100,  _("Zeroing Z axis"), 0.1)
+    app.macro("G91",                "ok", 1,    _("Setting Relative position"), 0.1,verbose=False)
+    app.macro("G0 Z+"+str(feeder_disengage_offset)+" F300", "ok", 5,    _("Engaging 4th Axis Motion"), 0.1)
+    app.macro("M92 E"+str(units_a), "ok", 1,    _("Setting 4th axis mode"), 0, verbose=False)
+    app.macro("G92 Z241",           "ok", 1,    _("Setting position"), 0.1, verbose=False)
+    app.macro("G90",                "ok", 1,    _("Setting Absolute position"), 0.1, verbose=False)
+    app.macro("G0 Z234",            "ok", 1,    _("Check position"), 0.1, verbose=False)
+    app.macro("M300",               "ok", 3,    _("Play beep sound"), 1, verbose=False)
+    
+def do_4th_axis_mode(app, args):
+    units_a = app.config.get('units', 'a')
+    app.macro("M92 E"+str(units_a), "ok", 1,    _("Setting 4th axis mode"), 0, verbose=False)

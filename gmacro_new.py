@@ -27,7 +27,7 @@ import gettext
 # Import external modules
 
 # Import internal modules
-from gpusher_new import GCodePusher
+from fabtotum.fabui.gpusher    import GCodePusher
 from fabtotum.fabui.macros.all import PRESET_MAP
 
 # Set up message catalog access

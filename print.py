@@ -68,16 +68,8 @@ class PrintApplication(GCodePusher):
     def first_move_callback(self):
         print "Print stared"
     
-    def file_done_callback(self):
-        #print "File done"
-        self.send('M400', trace='Waiting for all moves to finish.')
-        self.send('M104 S0')
-        self.send('M140 S0')
-        self.send('M300', trace='Done')
-        #print_macros(self)
-        
+    def file_done_callback(self):        
         self.stop()
-        
     
     def temp_change_callback(self, action, data):
         print action, data
