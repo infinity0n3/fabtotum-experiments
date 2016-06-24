@@ -31,7 +31,7 @@ tr = gettext.translation('gmacro', 'locale', fallback=True)
 _ = tr.ugettext
 
 
-def start_subtractive(app, args):
+def start_subtractive(app, args = None):
     units_a = app.config.get('units', 'a')
     
     #macro("G92 X0 Y0 Z0 E0","ok",3,"Setting Origin Point",1)
@@ -39,7 +39,7 @@ def start_subtractive(app, args):
     app.macro("M92 E"+str(units_a), "ok", 1,    _("Setting 4th Axis mode"), 0.1, verbose=False)
     
     
-def end_subtractive(app, args):
+def end_subtractive(app, args = None):
 
     try:
         color = app.config.get('units', 'color')

@@ -23,8 +23,8 @@
 # Import external modules
 
 # Import internal modules
-from fabtotum.utils import cura_utils
-from fabtotum.utils import slic3r_utils
+from fabtotum.utils.slicer import cura_utils
+from fabtotum.utils.slicer import slic3r_utils
 
 
 EXTERNALS = {

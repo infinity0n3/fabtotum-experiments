@@ -32,7 +32,7 @@ tr = gettext.translation('gmacro', 'locale', fallback=True)
 _ = tr.ugettext
 
 
-def pre_unload_spool(app, args):
+def pre_unload_spool(app, args = None):
     reply = app.send("M105")
     serial_reply = reply[0].rstrip()
     
@@ -50,7 +50,7 @@ def pre_unload_spool(app, args):
         
     app.macro("M104 S190",  "ok", 5,    _("Heating Nozzle..."), time_to_wait, verbose=True) #heating and waiting.
     
-def unload_spool(app, args):
+def unload_spool(app, args = None):
     units_e = app.config.get('units', 'e')
     
     app.trace( _("Unloading Spool : Procedure Started.") )
@@ -70,7 +70,7 @@ def unload_spool(app, args):
     app.macro("M302 S170",          "ok", 10,   _("Extrusion prevention enabled"), 0.1, verbose=False)
     app.trace( _("Done!") )
     
-def load_spool(app, args):
+def load_spool(app, args = None):
     units_e = app.config.get('units', 'e')
     
     app.trace( _("Loading Spool : Procedure Started.") )

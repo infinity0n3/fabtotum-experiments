@@ -2,8 +2,8 @@
 G28 X0 Y0
 
 M117 Getting ready.
-M190 S55.000000 ; Bed temperature
-M109 S70.000000 ; Extruder temperature
+M190 S65.000000 ; Bed temperature
+M109 S75.000000 ; Extruder temperature
 
 M117 OK, let's get the job done.
 G91
@@ -44,7 +44,7 @@ G1 Y10
 G1 X-10
 G1 Y-10
 ;LAYER:7
-M117 Relax...
+M117 And now slow...
 G1 X10 F200
 G1 Y10
 G1 X-10

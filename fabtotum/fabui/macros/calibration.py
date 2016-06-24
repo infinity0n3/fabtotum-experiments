@@ -31,7 +31,7 @@ tr = gettext.translation('gmacro', 'locale', fallback=True)
 _ = tr.ugettext
 
 
-def probe_setup_prepare(app, args):
+def probe_setup_prepare(app, args = None):
     app.trace( _("Preparing Calibration procedure") )
     app.trace( _("This may take a wile") )
     app.macro("M104 S200",          "ok", 90,   _("Heating extruder"), 0.1, verbose=True)
@@ -41,7 +41,7 @@ def probe_setup_prepare(app, args):
     app.macro("G90",                "ok", 2,    _("Abs_mode"), 1, verbose=False)
     app.macro("G0 Z5 F1000",        "ok", 2,    _("Moving to calibration position"), 1)
     
-def probe_setup_calibrate(app, args):
+def probe_setup_calibrate(app, args = None):
     
     app.trace( _("Calibrating probe") )
     app.macro("M104 S0",    "ok", 90,   _("Nozzle heating off"), 1, verbose=False)
@@ -76,7 +76,7 @@ def probe_setup_calibrate(app, args):
     app.trace( _("Probe calibrated : {0} mm").format(str(z_probe_new)) )
     app.macro("M300",           "ok", 5,    _("Done!"), 1)
     
-def raise_bed_no_g27(app, args):
+def raise_bed_no_g27(app, args = None):
     #for homing procedure before probe calibration.
     
     zprobe = app.config.get('units', 'zprobe')

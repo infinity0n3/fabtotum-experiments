@@ -35,10 +35,8 @@ from watchdog.events import PatternMatchingEventHandler
 
 # Import internal modules
 from fabtotum.fabui.config import ConfigService
-from fabtotum.utils.gcodefile import GCodeFile
-from fabtotum.utils.pyro.gcodeclient import GCodeServiceClient
 from gpusher_new import GCodePusherApplication
-
+import fabtotum.fabui.macros.milling as mill_macros
 
 config = ConfigService()
 
@@ -68,18 +66,27 @@ bed_temp_target = args.bed_temp     # BED TARGET TEMPERATURE (previously read fr
 
 ################################################################################
 
-class PrintApplication(GCodePusherApplication):
+class MillApplication(GCodePusherApplication):
     
     def __init__(self, command_file, monitor_file, log_trace):
-        super(PrintApplication, self).__init__(command_file, monitor_file, log_trace)
+        super(MillApplication, self).__init__(command_file, monitor_file, log_trace)
+    
+    def progress_callback(self, percentage):
+        print "Progress", percentage
     
     def first_move_callback(self):
         print "Milling stared"
-    
-    def temp_change_callback(self, action, data):
-        print action, data
+        
+    def file_done_callback(self):  
+        mill_macros.end_subtractive(self)
+        
+        self.stop()
+        
+    def run(self, gcode_file, task_id):
+        self.prepare(gcode_file, task_id)
+        self.send_file(gcode_file)
 
 
-app = PrintApplication(command_file, monitor_file, log_trace)
+app = MillApplication(command_file, monitor_file, log_trace)
 
-app.run(gcode_file, task_id, ext_temp, ext_temp_target, bed_temp, bed_temp_target)
+app.run(gcode_file, task_id)

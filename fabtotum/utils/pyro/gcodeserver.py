@@ -20,6 +20,7 @@
 
 
 # Import standard python module
+import time
 
 # Import external modules
 import Pyro4
@@ -33,34 +34,36 @@ from fabtotum.totumduino.gcode import GCodeService
 PYRO_URI_FILE = '/run/gcodeservice.uri'
 GCS = None
 
-class GCodeServicePyroServer(object):
-    def __init__(self):
+class GCodeServiceServerPyroWrapper(object):
+    def __init__(self, gcs):
         print "New GCodeService Wrapper"
+        self.gcs = gcs
         self.client_callback = None
         self.callback_list = []
     
     def send(self, code, expected_reply = 'ok', block = True, timeout = None):
-        global GCS
-        return GCS.send(code.encode('latin-1'), expected_reply.encode('latin-1'), block, timeout)
+        #global GCS
+        return self.gcs.send(code.encode('latin-1'), expected_reply.encode('latin-1'), block, timeout)
         
     def send_file(self, filename):
-        global GCS
-        GCS.send_file(filename)
+        self.gcs.send_file(filename)
     
     def __callback_handler(self, action, data):
         if self.callback_list:
-            for remote,uri in self.callback_list:
-                #self.client_callback.do_callback(action, data)
-                remote.do_callback(action, data)
+            for tup in self.callback_list:
+                remote = tup[0]
+                try:
+                    remote.do_callback(action, data)
+                except CommunicationError:
+                    self.callback_list.remove(tup)
     
     def register_callback(self, callback_name, uri):
-        global GCS
         remote = Pyro4.Proxy(uri)
         
         self.callback_list.append( (remote, uri) )
             
         if self.callback_list:
-            GCS.register_callback(callback_name, self.__callback_handler)
+            self.gcs.register_callback(callback_name, self.__callback_handler)
 
     def unregister_callback(self, callback_name, uri):
         for client in self.callback_list:
@@ -68,28 +71,43 @@ class GCodeServicePyroServer(object):
                 self.callback_list.remove(client)
 
         if not self.callback_list:
-            GCS.unregister_callback()
+            self.gcs.unregister_callback()
 
     def get_progress(self):
-        global GCS
-        return GCS.get_progress()
+        return self.gcs.get_progress()
 
     def get_idle_time(self):
-        global GCS
-        return GCS.get_idle_time()
+        return self.gcs.get_idle_time()
 
-def GCodeServiceApplication():
-    global GCS
+class GCodeServiceServer(object):
     
-    GCS = GCodeService()
-    GCS.start() 
-    #daemon = Pyro4.Daemon(port=9999)
-    daemon = Pyro4.Daemon()
+    def __init__(self, gcs = None):
+        
+        if gcs:
+            self.gcs = gcs
+            self.gcs_external = True
+        else:
+            self.gcs = GCodeService()
+            self.gcs.start()
+            self.gcs_external = False
+        
+        daemon = Pyro4.Daemon()
+        wrapper = GCodeServiceServerPyroWrapper(self.gcs)
+        uri = daemon.register(wrapper, objectId='GCodeService')
+        
+        self.daemon = daemon
+        self.wrapper = wrapper
+        self.uri = uri
+        
+        # Write pyro uri to a file
+        with open(PYRO_URI_FILE, 'w') as file:
+            file.write(uri.asString())
 
-    service_wrapper = GCodeServicePyroServer()
-    uri = daemon.register(service_wrapper, objectId='GCodeService')
-
-    with open(PYRO_URI_FILE, 'w') as file:
-        file.write(uri.asString())
-
-    daemon.requestLoop()
+    def loop(self):
+        self.daemon.requestLoop()
+        if not self.gcs_external:
+            self.gcs.loop()
+        
+    def stop(self):
+        self.daemon.shutdown()
+        time.sleep(1)

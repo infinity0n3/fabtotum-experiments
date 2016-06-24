@@ -10,20 +10,17 @@ LOG_PATH        = '/var/log/fabui/'
 
 PYTHON_PATH		= FABUI_PATH + 'ext/py/'
 BASH_PATH		= FABUI_PATH + 'ext/bash/'
+
 TASKS_PATH		= WWW_PATH + 'tasks'
 RECOVERY_PATH	= WWW_PATH + 'recovery/'
 UPLOAD_PATH		= WWW_PATH + 'upload/'
 TEMP_PATH		= WWW_PATH + 'temp/'
+
 BIGTEMP_PATH	= '/mnt/bigtemp/'
 USERDATA_PATH	= '/mnt/userdata/'
 USB_MEDIA_PATH	= '/run/media/'
-LOCK_FILE		= TEMP_PATH + 'LOCK';
-INI_FILE		= LIB_PATH + 'config.ini'
-SERIAL_INI		= LIB_PATH + 'serial.ini'
 
-# SERIAL PORT CONSTANTS
-UART_PORT_NAME		= '/dev/ttyAMA0'
-UART_BAUD_RATE		= '250000'
-#~ UART_READ_TIMEOUT	= 0.5
+CONFIG_INI		= LIB_PATH + 'config.ini'
+SERIAL_INI		= LIB_PATH + 'serial.ini'
 
 DEBUG_IS_ON			= False

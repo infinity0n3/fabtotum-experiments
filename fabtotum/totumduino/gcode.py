@@ -32,7 +32,6 @@ except ImportError:
 import serial
 
 # Import internal modules
-from fabtotum.os.config import UART_PORT_NAME, UART_BAUD_RATE
 from fabtotum.utils.singleton import Singleton
 from fabtotum.utils.gcodefile import GCodeFile
 from fabtotum.totumduino.hooks import action_hook
@@ -147,14 +146,14 @@ class GCodeService:
     
     REPLY_QUEUE_SIZE = 1
     
-    def __init__(self, serial_port = UART_PORT_NAME, serial_baud = UART_BAUD_RATE):
+    def __init__(self, serial_port, serial_baud, serial_timeout = 5):
         self.running = True
         
         # Serial
         self.serial = serial.serial_for_url(
                                 serial_port,
                                 baudrate = serial_baud,
-                                timeout = 5
+                                timeout = serial_timeout
                                 )
         self.serial.flushInput()
         self.buffer = bytearray()

@@ -30,11 +30,15 @@ import gettext
 tr = gettext.translation('gmacro', 'locale', fallback=True)
 _ = tr.ugettext
 
-def home_all(app, args):
+def home_all(app, args = None):
     
-    zprobe = app.config.get('units', 'zprobe')
-    zprobe_disabled = (zprobe['disable'] == 1)
-    zmax_home_pos   = float(zprobe['zmax'])
+    try:
+        zprobe = app.config.get('units', 'zprobe')
+        zprobe_disabled = (zprobe['disable'] == 1)
+        zmax_home_pos   = float(zprobe['zmax'])
+    except KeyError:
+        zmax_home_pos = 206.0
+        zprobe_disabled = False
     
     app.trace( _("Now homing all axes") )
     app.macro("G90", "ok", 2, _("Set abs position"), 0, verbose=False)
@@ -46,7 +50,7 @@ def home_all(app, args):
     else:
         app.macro("G28",                                "ok", 100,  _("Homing all axes"), 1, verbose=False)
 
-def start_up(app, args):
+def start_up(app, args = None):
     
     try:
         color = app.config.get('units', 'color')
@@ -85,18 +89,22 @@ def start_up(app, args):
 
     app.macro("M734 S"+str(collision_warning),  "ok", 2, _("Machine Limits Collision warning") ,0.1,verbose=False)
 
-def shutdown(app, args):
+def shutdown(app, args = None):
     app.trace( _("Shutting down...") ) 
     app.macro("M300",   "ok", 5, _("Play alert sound!"), 1, verbose=False)
     app.macro("M729",   "ok", 2, _("Asleep!"), 1, verbose=False)
     
-def raise_bed(app, args):
+def raise_bed(app, args = None):
     """
     For homing procedure before probe calibration and print without homing.
     """
-    zprobe = app.config.get('units', 'zprobe')
-    zprobe_disabled = (zprobe['disable'] == 1)
-    zmax_home_pos   = float(zprobe['zmax'])
+    try:
+        zprobe = app.config.get('units', 'zprobe')
+        zprobe_disabled = (zprobe['disable'] == 1)
+        zmax_home_pos   = float(zprobe['zmax'])
+    except KeyError:
+        zmax_home_pos = 206.0
+        zprobe_disabled = False
     
     app.macro("M402",   "ok", 4,    _("Raising probe"), 0.1, verbose=True)
     app.macro("G90",    "ok", 2,    _("Setting absolute position"), 1)
@@ -112,7 +120,7 @@ def raise_bed(app, args):
         app.macro("G0 Z10 F10000",  "ok", 15,   _("Raising"), 0.1)
         app.macro("G28",            "ok", 100,  _("homing all axes"), 0.1, verbose=False)
 
-def auto_bed_leveling(app, args):
+def auto_bed_leveling(app, args = None):
     app.trace( _("Auto Bed leveling Initialized") )
     app.macro("G91",                "ok", 2,    _("Setting relative position"), 1, verbose=False)
     app.macro("G0 Z25 F1000",       "ok", 2,    _("Moving away from the plane"), 1,verbose=False)
@@ -121,13 +129,13 @@ def auto_bed_leveling(app, args):
     app.macro("G29",                "ok", 140,  _("Auto bed leveling procedure"), 1)
     app.macro("G0 X5 Y5 Z60 F2000", "ok", 100,  _("Getting to idle position"), 1)
 
-def probe_down(app, args):
+def probe_down(app, args = None):
     app.macro("M401",   "ok", 1, _("Probe Down"), 0)
     
-def probe_up(app, args):
+def probe_up(app, args = None):
     app.macro("M402",   "ok", 1, _("Probe Up"), 0)
 
-def safe_zone(app, args):
+def safe_zone(app, args = None):
     app.send("G91")
     app.send("G0 E-5 F1000")
     app.send("G0 Z+1 F1000")
@@ -135,7 +143,7 @@ def safe_zone(app, args):
     app.send("G27 Z0")
     app.send("G0 X210 Y210")
 
-def engage_4axis(app, args):
+def engage_4axis(app, args = None):
     units_a = app.config.get('units', 'a')
     try:
         feeder_disengage_offset = app.config.get('units', 'feeder')['disengage-offset']
@@ -152,6 +160,6 @@ def engage_4axis(app, args):
     app.macro("G0 Z234",            "ok", 1,    _("Check position"), 0.1, verbose=False)
     app.macro("M300",               "ok", 3,    _("Play beep sound"), 1, verbose=False)
     
-def do_4th_axis_mode(app, args):
+def do_4th_axis_mode(app, args = None):
     units_a = app.config.get('units', 'a')
     app.macro("M92 E"+str(units_a), "ok", 1,    _("Setting 4th axis mode"), 0, verbose=False)

@@ -28,8 +28,9 @@ from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
 
 # Import internal modules
-from fabtotum.fabui.config import ConfigService
-from gpusher_new import GCodePusher
+from fabtotum.fabui.config  import ConfigService
+from fabtotum.fabui.gpusher import GCodePusher
+import fabtotum.fabui.macros.general as general_macros
 import fabtotum.fabui.macros.printing as print_macros
 
 config = ConfigService()
@@ -43,6 +44,7 @@ parser.add_argument("monitor",      help="monitor file",  default=config.get('ge
 parser.add_argument("trace",        help="trace file",  default=config.get('general', 'trace'), nargs='?')
 parser.add_argument("--ext_temp",   help="extruder temperature (for UI feedback only)",  default=180, nargs='?')
 parser.add_argument("--bed_temp",   help="bed temperature (for UI feedback only)",  default=50,  nargs='?')
+parser.add_argument("--standalone",   help="call macros internally",  default=False, nargs='?')
 
 # GET ARGUMENTS
 args = parser.parse_args()
@@ -57,18 +59,29 @@ ext_temp        = 0.0
 ext_temp_target = args.ext_temp     # EXTRUDER TARGET TEMPERATURE (previously read from file) 
 bed_temp        = 0.0
 bed_temp_target = args.bed_temp     # BED TARGET TEMPERATURE (previously read from file) 
-
+standalone      = args.standalone   # Standalong operation
 ################################################################################
 
 class PrintApplication(GCodePusher):
     
-    def __init__(self, log_trace, monitor_file):
+    def __init__(self, log_trace, monitor_file, standalone = False):
         super(PrintApplication, self).__init__(log_trace, monitor_file)
+        self.standalone = standalone
+    
+    def trace(selg, msg):
+        print msg
+    
+    def progress_callback(self, percentage):
+        print "Progress", percentage
     
     def first_move_callback(self):
         print "Print stared"
     
-    def file_done_callback(self):        
+    def file_done_callback(self):  
+        if self.standalone:
+            print_macros.end_additive(self)
+            print_macros.end_additive_safe_zone(self)
+        
         self.stop()
     
     def temp_change_callback(self, action, data):
@@ -77,10 +90,15 @@ class PrintApplication(GCodePusher):
     def run(self, gcode_file, task_id, ext_temp, ext_temp_target, bed_temp, bed_temp_target):
         
         self.prepare(gcode_file, task_id, ext_temp, ext_temp_target, bed_temp, bed_temp_target)
+        
+        if self.standalone:
+            general_macros.raise_bed(self)
+            print_macros.start_additive(self, [ext_temp_target, bed_temp_target])
+        
         self.send_file(gcode_file)
 
 
-app = PrintApplication(log_trace, monitor_file)
+app = PrintApplication(log_trace, monitor_file, standalone)
 
 app.run(gcode_file, task_id, ext_temp, ext_temp_target, bed_temp, bed_temp_target)
 app.loop()

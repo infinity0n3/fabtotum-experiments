@@ -45,7 +45,7 @@ def start_additive(app, args):
     app.macro("M221 S100",              "ok", 1,    _("Reset Extruder factor override"),   0.1, verbose=False)
     app.macro("M92 E"+str(units_e),     "ok", 1,    _("Setting extruder mode"),            0.1, verbose=False)
 
-def end_additive(app, args):
+def end_additive(app, args = None):
     try:
         color = app.config.get('units', 'color')
     except KeyError:
@@ -73,7 +73,7 @@ def end_additive(app, args):
     app.macro("M703 S"+str(color['b']), "ok", 2,    _("Turning on lights"), 0.1, verbose=False)
     app.macro("M300",                   "ok", 1,    _("Printing completed!"), 1, verbose=False)  #end print signal
 
-def check_pre_print(app, args):
+def check_pre_print(app, args = None):
     try:
         safety_door = app.config.get('units', 'safety')['door']
     except KeyError:
@@ -85,7 +85,7 @@ def check_pre_print(app, args):
     app.macro("M744",       "TRIGGERED", 1, _("Building plane inserted correctly"), 0.1, warning=True)
     app.macro("M744",       "TRIGGERED", 1, _("Spool panel control"), 0.1, warning=True)
 
-def engage_feeder(app, args):
+def engage_feeder(app, args = None):
     try:
         safety_door = app.config.get('units', 'safety')['door']
     except KeyError:
@@ -103,7 +103,7 @@ def engage_feeder(app, args):
     app.macro("M18",                "ok", 3,        _("Stopping motors"), 0.1, verbose=False)
     app.macro("M300",               "ok", 3,        _("Play beep sound"), 1, verbose=False)
 
-def end_additive_safe_zone(app, args):
+def end_additive_safe_zone(app, args = None):
     app.macro("G90",                        "ok", 2,    _("Setting Absolute position"), 0)
     app.macro("G0 X210 Y210 Z200 F10000",   "ok", 100,  _("Moving to safe zone"), 1)
 

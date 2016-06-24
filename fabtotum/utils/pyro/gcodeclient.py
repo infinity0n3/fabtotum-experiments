@@ -37,12 +37,13 @@ from fabtotum.utils.pyro.gcodeservice import PYRO_URI_FILE
 ###############################
 
 class CallbackHandler:
+    """ Callback Handler class """
+    
     def __init__(self, gc):
         self.gc = gc
     
     def do_callback(self, action, data):
         if action:
-            #print "client: callback received (", action, data, ")"
             self.gc.do_callback(action, data)
    
 class GCodeServiceClient(object):
@@ -63,21 +64,18 @@ class GCodeServiceClient(object):
     
     def do_callback(self, action, data):
         if self.callback:
-            #~ print 'calling callback'
             self.callback(action, data)
     
     def still_running(self):
         return self.running
     
     def __close(self):
-        #~ print "client: stop"
         self.running = False
         if self.daemon:
             self.__unregister_callback()
             self.daemon.shutdown()
     
     def __register_callback(self, callback_fun):
-        #~ print "client: register_callback"
         
         if not self.daemon:
             self.daemon = Pyro4.Daemon()
@@ -90,11 +88,9 @@ class GCodeServiceClient(object):
         self.server.unregister_callback('<pyro_callback>', self.uri.asString())
     
     def __loop(self):
-        #print "client: loop"
         if self.daemon:
             self.daemon.requestLoop(loopCondition=self.still_running)
             self.daemon.close()
-        #print "client: loop end"
     
     def __getattr__(self, attr):            
         if attr == 'register_callback':

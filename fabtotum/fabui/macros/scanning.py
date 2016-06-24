@@ -31,7 +31,7 @@ tr = gettext.translation('gmacro', 'locale', fallback=True)
 _ = tr.ugettext
 
 
-def check_pre_scan(app, args):
+def check_pre_scan(app, args = None):
     units_a = app.config.get('units', 'a')
     
     try:
@@ -61,7 +61,7 @@ def check_pre_scan(app, args):
     app.macro("G0 Z135 F1000",  "ok", 5,        _("Moving to pre-scan position"), 1)
     # macro("M18","ok",1,"Motor Off",1) #should be moved to firmware
     
-def rotary_scan(app, args):
+def rotary_scan(app, args = None):
     app.trace( _("Initializing Rotative Laser scanner") )
     app.trace( _("Checking panel door status and bed inserted") )
     if(safety_door == 1):
@@ -76,7 +76,7 @@ def rotary_scan(app, args):
     app.macro("M302 S0",    "ok", 2,            _("Enabling cold extrusion"), 0, verbose=False)
     #macro("M92 E"+str(units['a']),"ok",1,"Setting 4th axis mode",0)
     
-def photogrammetry_scan(app, args):
+def photogrammetry_scan(app, args = None):
     try:
         safety_door = app.config.get('units', 'safety')['door']
     except KeyError:
@@ -95,7 +95,7 @@ def photogrammetry_scan(app, args):
     app.macro("G0 X96 Y175 Z135 E0 F10000", "ok", 90,   _("Moving to collimation position"), 1)
     app.macro("M302 S0","ok",2,                 _("Enabling cold extrusion"), 0, verbose=False)
 
-def sweep_scan(app, args):
+def sweep_scan(app, args = None):
     try:
         safety_door = app.config.get('units', 'safety')['door']
     except KeyError:
@@ -116,7 +116,7 @@ def sweep_scan(app, args):
     # macro("M92 E"+str(units['a']),"ok",1,"Setting 4th axis mode",0)
     app.macro("G0 Z145 F1000",  "ok", 90,       _("Lowering the plane"), 1, verbose=False)
 
-def probe_scan(app, args):
+def probe_scan(app, args = None):
     units_a = app.config.get('units', 'a')
     try:
         safety_door = app.config.get('units', 'safety')['door']
@@ -133,7 +133,7 @@ def probe_scan(app, args):
     app.macro("M302 S0",            "ok", 2,        _("Disabling cold extrusion prevention"), 0, verbose=False)
     app.macro("M92 E"+str(units_a), "ok", 2,        _("Setting 4th axis mode"), 0, verbose=False)
 
-def end_scan(app, args):
+def end_scan(app, args = None):
     try:
         color = app.config.get('units', 'color')
     except KeyError:

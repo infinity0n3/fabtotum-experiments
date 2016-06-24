@@ -100,6 +100,8 @@ class GCodePusher(object):
         self.macro_warning = 0
         self.macro_skipped = 0
         
+        self.progress_monitor = None
+        
         logging.basicConfig( filename=log_trace, level=logging.INFO, format='%(message)s')
     
     def writeMonitor(self):
@@ -292,6 +294,9 @@ class GCodePusher(object):
         
         self.writeMonitor()
     
+    def progress_callback(self, percentage):
+        pass
+    
     def callback_handler(self, action, data):
         if action == 'file_done':
             self.__file_done_callback(data)
@@ -306,31 +311,39 @@ class GCodePusher(object):
         elif action == 'state_change':
             self.state_change_callback()
 
-    #~ def temperature_monitor_thread(self):
-        #~ while self.gcs.still_running():
-            #~ reply = self.gcs.send("M105")
+    def progress_monitor_thread(self):
+        old_progress = -1
+        monitor_write = False
+        
+        while self.gcs.still_running():
             
-            #~ # Don't lock until there is something to process
-            #~ # so that other threads are not unnecessary blocked
-            #~ self.monitor_lock.acquire()
+            progress = self.gcs.get_progress()
             
-            #~ if reply:
-                #~ #print reply
-                #~ a, b, c, d = parse_temperature(reply[0])
-                #~ self.monitor_info['ext_temp'] = a
-                #~ self.monitor_info['ext_temp_target'] = b
-                #~ self.monitor_info['bed_temp'] = c
-                #~ self.monitor_info['bed_temp_target'] = d
-            
-            #~ self.monitor_info['progress'] = self.gcs.get_progress()
-            
-            #~ #print monitor_info['ext_temp'], monitor_info['progress']
-            
-            #~ self.monitor_lock.release()
-            
-            #~ self.writeMonitor()
-            
-            #~ time.sleep(1)
+            if self.monitor_info["gcode_info"]:
+                if self.monitor_info["gcode_info"]["type"] == GCodeInfo.PRINT:
+                    reply = self.gcs.send("M105")
+                    a, b, c, d = parse_temperature(reply[0])
+                    self.monitor_lock.acquire()
+                    self.monitor_info['ext_temp'] = a
+                    self.monitor_info['ext_temp_target'] = b
+                    self.monitor_info['bed_temp'] = c
+                    self.monitor_info['bed_temp_target'] = d
+                    self.monitor_lock.release()
+                    monitor_write = True
+                
+            if old_progress != progress:
+                old_progress = progress
+                self.monitor_lock.acquire()
+                self.monitor_info['progress'] = progress
+                self.monitor_lock.release()
+                self.progress_callback(progress)
+                monitor_write = True
+
+            if monitor_write:
+                self.writeMonitor()
+                monitor_write = False
+
+            time.sleep(2)
             
     #~ ''' WATCHDOG CLASS HANDLER FOR DATA FILE COMMAND '''
     #~ class OverrideCommandsHandler(PatternMatchingEventHandler):
@@ -389,6 +402,13 @@ class GCodePusher(object):
         
         #~ self.temperature_monitor = Thread( target=self.temperature_monitor_thread )
         #~ self.temperature_monitor.start()
+        if self.monitor_file:
+            print "Creating monitor thread"
+            
+            self.progress_monitor = Thread( target=self.progress_monitor_thread )
+            self.progress_monitor.start() 
+        else:
+            print "Skipping monitor thread"
         
         if gfile.info['type'] == GCodeInfo.PRINT:
             # READ TEMPERATURES BEFORE PRINT STARTS (improve UI feedback response)
@@ -410,6 +430,8 @@ class GCodePusher(object):
         Wait for all GCodePusher threads to finish.
         """
         self.gcs.loop()
+        if self.progress_monitor:
+            self.progress_monitor.join()
         time.sleep(0.5)
         
     def __stop_thread(self):
@@ -439,6 +461,9 @@ class GCodePusher(object):
         """
         """
         if self.macro_error == 0:
+            if verbose:
+                self.trace(error_msg)
+            
             reply = self.gcs.send(code)
             if expected_reply:
                 # Check if the reply is as expected
@@ -449,12 +474,6 @@ class GCodePusher(object):
                     else:
                         self.trace(error_msg + _(": Failed ({0})".format(reply[0]) ))
                         self.macro_error += 1
-                else:
-                    if verbose:
-                        self.trace(error_msg)
-            else:
-                if verbose:
-                    self.trace(error_msg)
         else:
             self.trace(error_msg + _(": Skipped"))
             self.macro_skipped += 1

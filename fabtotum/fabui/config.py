@@ -26,13 +26,10 @@ import ConfigParser
 # Import external modules
 
 # Import internal modules
+from fabtotun.os.paths        import CONFIG_INI, SERIAL_INI
 from fabtotum.utils.singleton import Singleton
 
 #####################################################
-
-LIB_PATH		= '/var/lib/fabui/';
-INI_FILE		= LIB_PATH + 'config.ini'
-SERIAL_INI		= LIB_PATH + 'serial.ini'
 
 # TODO: check whether ConfigParser needs reloading too
 
@@ -65,10 +62,7 @@ class ConfigService:
             json_f = open(self.HW_CUSTOM_SETTINGS)
             self.units = json.load(json_f)
         
-    def get(self, section, key):
-        # TODO: try except protection
-        # KeyError
-        
+    def get(self, section, key):        
         value = ''
         
         if section == 'serial':

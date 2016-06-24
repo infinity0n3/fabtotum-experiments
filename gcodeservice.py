@@ -1,6 +1,7 @@
 #!/bin/env python
 # -*- coding: utf-8; -*-
 
-from fabtotum.utils.pyro.gcodeservice import GCodeServiceApplication
+from fabtotum.utils.pyro.gcodeservice import GCodeServiceServer
 
-GCodeServiceApplication()
+gcss = GCodeServiceServer()
+gcss.loop()
