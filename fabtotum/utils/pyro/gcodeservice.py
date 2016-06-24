@@ -37,23 +37,38 @@ class GCodeServicePyroServer(object):
     def __init__(self):
         print "New GCodeService Wrapper"
         self.client_callback = None
+        self.callback_list = []
     
-    def send(self, code, expected_reply = 'ok', block = True):
+    def send(self, code, expected_reply = 'ok', block = True, timeout = None):
         global GCS
-        return GCS.send(code.encode('latin-1'), expected_reply.encode('latin-1'), block)
+        return GCS.send(code.encode('latin-1'), expected_reply.encode('latin-1'), block, timeout)
         
     def send_file(self, filename):
         global GCS
         GCS.send_file(filename)
     
     def __callback_handler(self, action, data):
-        if self.client_callback:
-            self.client_callback.do_callback(action, data)
+        if self.callback_list:
+            for remote,uri in self.callback_list:
+                #self.client_callback.do_callback(action, data)
+                remote.do_callback(action, data)
     
     def register_callback(self, callback_name, uri):
         global GCS
-        self.client_callback = Pyro4.Proxy(uri)
-        GCS.register_callback(callback_name, self.__callback_handler)
+        remote = Pyro4.Proxy(uri)
+        
+        self.callback_list.append( (remote, uri) )
+            
+        if self.callback_list:
+            GCS.register_callback(callback_name, self.__callback_handler)
+
+    def unregister_callback(self, callback_name, uri):
+        for client in self.callback_list:
+            if client[1] == uri:
+                self.callback_list.remove(client)
+
+        if not self.callback_list:
+            GCS.unregister_callback()
 
     def get_progress(self):
         global GCS

@@ -66,18 +66,31 @@ import re
     #~ print match.group('E')
     #~ print match.group('W')
     
-def tuple():
-    return 1,2,3,4
+#~ def tuple():
+    #~ return 1,2,3,4
     
-line = 'ok T:70.0 /75.0 B:55.1 /55.0 T0:70.0 /70.0 @:13 B@:127'
+#~ line = 'ok T:70.0 /75.0 B:55.1 /55.0 T0:70.0 /70.0 @:13 B@:127'
 
-match = re.search('ok\sT:(?P<T>[0-9]+\.[0-9]+)\s\/(?P<TT>[0-9]+\.[0-9]+)\sB:(?P<B>[0-9]+\.[0-9]+)\s\/(?P<BT>[0-9]+\.[0-9]+)\s', line)
-if match:
-    print match.group('T'), match.group('TT'), match.group('B'), match.group('BT')
+#~ match = re.search('ok\sT:(?P<T>[0-9]+\.[0-9]+)\s\/(?P<TT>[0-9]+\.[0-9]+)\sB:(?P<B>[0-9]+\.[0-9]+)\s\/(?P<BT>[0-9]+\.[0-9]+)\s', line)
+#~ if match:
+    #~ print match.group('T'), match.group('TT'), match.group('B'), match.group('BT')
     #~ return float(temperature_match.group(1)) \
         #~ ,  float(temperature_match.group(2)) \
         #~ ,  float(temperature_match.group(3)) \
         #~ ,  float(temperature_match.group(4))
 
-a,b,c,d = tuple()
-print a,b,c,d
+#~ a,b,c,d = tuple()
+#~ print a,b,c,d
+
+some_list = []
+
+some_list.append( ('a', 1) )
+some_list.append( ('b', 10) )
+some_list.append( ('c', 100) )
+
+for tup in some_list:
+    print tup
+    if tup[0] == 'b':
+        some_list.remove(tup)
+
+print some_list

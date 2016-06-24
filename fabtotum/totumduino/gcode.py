@@ -124,7 +124,7 @@ class Command(object):
         return cls(Command.RESUME, None)
 
     @classmethod
-    def gcode(cls, code, expected_reply, group = 'gcode'):
+    def gcode(cls, code, expected_reply = 'ok', group = 'gcode'):
         return cls(Command.GCODE, code, expected_reply, group)
 
     @classmethod
@@ -209,17 +209,20 @@ class GCodeService:
             self.callback(callback_name, data)
         
     def __trigger_callback(self, callback_name, data):
+        print "trigger_callback", callback_name, data
         callback_thread = Thread( 
                 target = self.__callback_thread, 
                 args=( [callback_name, data] ) 
                 )
         callback_thread.start()
     
-    def __send_gcode_command(self, code, expected_reply = 'ok', group = 'gcode'):
-        
+    def __send_gcode_command(self, code, group = 'gcode'):
+        """
+        Internal gcode send function with command processing hooks
+        """
         if isinstance(code, str):
             gcode_raw = code
-            gcode_command = Command.gcode(gcode_raw, expected_reply, group)
+            gcode_command = Command.gcode(gcode_raw, group=group)
         elif isinstance(code, Command):
             gcode_raw = code.data + '\r\n'
             gcode_command = code
@@ -588,8 +591,11 @@ class GCodeService:
         """
         #self.callbacks[callback_name] = callback_fun
         self.callback = callback_fun
+        
+    def unregister_callback(self):
+        self.callback = None
     
-    def send(self, code, expected_reply = 'ok', block = True):
+    def send(self, code, expected_reply = 'ok', block = True, timeout = None):
         """
         Send GCode and return reply.
         """

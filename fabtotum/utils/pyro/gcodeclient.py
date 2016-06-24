@@ -73,6 +73,7 @@ class GCodeServiceClient(object):
         #~ print "client: stop"
         self.running = False
         if self.daemon:
+            self.__unregister_callback()
             self.daemon.shutdown()
     
     def __register_callback(self, callback_fun):
@@ -85,10 +86,14 @@ class GCodeServiceClient(object):
         self.callback = callback_fun
         self.server.register_callback('<pyro_callback>', self.uri.asString())
     
+    def __unregister_callback(self):
+        self.server.unregister_callback('<pyro_callback>', self.uri.asString())
+    
     def __loop(self):
         #print "client: loop"
-        self.daemon.requestLoop(loopCondition=self.still_running)
-        self.daemon.close()
+        if self.daemon:
+            self.daemon.requestLoop(loopCondition=self.still_running)
+            self.daemon.close()
         #print "client: loop end"
     
     def __getattr__(self, attr):            

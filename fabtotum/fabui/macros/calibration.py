@@ -18,15 +18,16 @@
 # You should have received a copy of the GNU General Public License
 # along with FABUI.  If not, see <http://www.gnu.org/licenses/>.
 
-#zero_all
-def home_all(gcs, _trace):
-    trace("Now homing all axes")
-    macro("G90","ok",2,"set abs position",0,verbose=False)
-    
-    #macro("G28","ok",100,"homing all axes",1,verbose=False)
-    if zprobe_disabled:
-        print "Z probe disabled"
-        macro("G27 X0 Y0 Z" + str(zmax_home_pos),"ok",100,"Homing all axes",0.1)
-        macro("G0 Z50 F10000","ok",15,"raising",0.1, verbose=False)
-    else:
-        macro("G28","ok",100,"homing all axes",1,verbose=False)
+# Import standard python module
+import gettext
+
+# Import external modules
+
+# Import internal modules
+
+
+# Set up message catalog access
+tr = gettext.translation('gmacro', 'locale', fallback=True)
+_ = tr.ugettext
+
+

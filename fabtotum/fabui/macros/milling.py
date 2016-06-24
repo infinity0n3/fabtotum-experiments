@@ -18,3 +18,16 @@
 # You should have received a copy of the GNU General Public License
 # along with FABUI.  If not, see <http://www.gnu.org/licenses/>.
 
+# Import standard python module
+import gettext
+
+# Import external modules
+
+# Import internal modules
+
+
+# Set up message catalog access
+tr = gettext.translation('gmacro', 'locale', fallback=True)
+_ = tr.ugettext
+
+

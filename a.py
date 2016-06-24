@@ -20,12 +20,12 @@ gcs = GCodeServiceClient()
 #~ reply = gcs.send('M119')
 #~ print reply
 
-reply = gcs.send('M105')
-print reply
+print gcs.send('M744')
+print gcs.send('M742')
 
-gcs.register_callback(callback_function)
+#~ gcs.register_callback(callback_function)
 
 #~ gcs.send_file('test_short.gcode')
-gcs.send_file('fake_cura.gcode')
+#~ gcs.send_file('fake_cura.gcode')
 
-gcs.loop()
+#~ gcs.loop()

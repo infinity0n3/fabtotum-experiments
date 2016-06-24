@@ -19,8 +19,14 @@
 # along with FABUI.  If not, see <http://www.gnu.org/licenses/>.
 
 # Import standard python module
+import sys
+import re
+import json
 import argparse
 import time
+import logging
+from threading import Event, Thread, RLock
+
 import gettext
 
 # Import external modules
@@ -29,8 +35,10 @@ from watchdog.events import PatternMatchingEventHandler
 
 # Import internal modules
 from fabtotum.fabui.config import ConfigService
-from gpusher_new import GCodePusher
-import fabtotum.fabui.macros.printing as print_macros
+from fabtotum.utils.gcodefile import GCodeFile
+from fabtotum.utils.pyro.gcodeclient import GCodeServiceClient
+from gpusher_new import GCodePusherApplication
+
 
 config = ConfigService()
 
@@ -60,51 +68,18 @@ bed_temp_target = args.bed_temp     # BED TARGET TEMPERATURE (previously read fr
 
 ################################################################################
 
-class PrintApplication(GCodePusher):
+class PrintApplication(GCodePusherApplication):
     
-    def __init__(self, log_trace, monitor_file):
-        super(PrintApplication, self).__init__(log_trace, monitor_file)
+    def __init__(self, command_file, monitor_file, log_trace):
+        super(PrintApplication, self).__init__(command_file, monitor_file, log_trace)
     
     def first_move_callback(self):
-        print "Print stared"
-    
-    def file_done_callback(self):
-        #print "File done"
-        self.send('M400', trace='Waiting for all moves to finish.')
-        self.send('M104 S0')
-        self.send('M140 S0')
-        self.send('M300', trace='Done')
-        #print_macros(self)
-        
-        self.stop()
-        
+        print "Milling stared"
     
     def temp_change_callback(self, action, data):
         print action, data
-        
-    def run(self, gcode_file, task_id, ext_temp, ext_temp_target, bed_temp, bed_temp_target):
-        
-        self.prepare(gcode_file, task_id, ext_temp, ext_temp_target, bed_temp, bed_temp_target)
-        self.send_file(gcode_file)
 
 
-app = PrintApplication(log_trace, monitor_file)
+app = PrintApplication(command_file, monitor_file, log_trace)
 
 app.run(gcode_file, task_id, ext_temp, ext_temp_target, bed_temp, bed_temp_target)
-app.loop()
-
-
-#~ temperature_monitor = Thread( target=self.temperature_monitor_thread )
-#~ temperature_monitor.start()
-
-#~ event_handler = GCodePusherApplication.OverrideCommandsHandler(patterns=[command_file])
-#~ observer = Observer()
-#~ observer.schedule(event_handler, '/var/www/tasks/', recursive=True)
-#~ observer.start()
-
-
-
-
-#~ observer.stop()
-#temperature_monitor.join()
-#~ observer.join()

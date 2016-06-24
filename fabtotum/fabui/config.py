@@ -20,15 +20,21 @@
 
 
 # Import standard python module
+import json
 import ConfigParser
 
 # Import external modules
 
 # Import internal modules
-from fabtotum.os.config import INI_FILE, SERIAL_INI
 from fabtotum.utils.singleton import Singleton
 
 #####################################################
+
+LIB_PATH		= '/var/lib/fabui/';
+INI_FILE		= LIB_PATH + 'config.ini'
+SERIAL_INI		= LIB_PATH + 'serial.ini'
+
+# TODO: check whether ConfigParser needs reloading too
 
 class ConfigService:
     __metaclass__ = Singleton
@@ -41,13 +47,34 @@ class ConfigService:
         self.serialconfig = ConfigParser.ConfigParser()
         self.serialconfig.read(SERIAL_INI)
         
+        self.HW_DEFAULT_SETTINGS = self.config.get('hardware', 'default_settings')
+        self.HW_CUSTOM_SETTINGS  = self.config.get('hardware', 'custom_settings')
+        
+        json_f = open(self.HW_DEFAULT_SETTINGS)
+        self.units = json.load(json_f)
+        
+        if 'settings_type' in self.units and self.units['settings_type'] == 'custom':
+            json_f = open(self.HW_CUSTOM_SETTINGS)
+            self.units = json.load(json_f)
+    
+    def reload(self):
+        json_f = open(self.HW_DEFAULT_SETTINGS)
+        self.units = json.load(json_f)
+        
+        if 'settings_type' in self.units and self.units['settings_type'] == 'custom':
+            json_f = open(self.HW_CUSTOM_SETTINGS)
+            self.units = json.load(json_f)
+        
     def get(self, section, key):
         # TODO: try except protection
+        # KeyError
         
         value = ''
         
         if section == 'serial':
             value = self.serialconfig.get('serial', key)
+        elif section == 'units':
+            value = self.units[key]
         else:
             value = self.config.get(section, key)
         
