@@ -18,6 +18,8 @@
 # You should have received a copy of the GNU General Public License
 # along with FABUI.  If not, see <http://www.gnu.org/licenses/>.
 
+__docformat__ = 'reStructuredText'
+
 # Import standard python module
 import gettext
 

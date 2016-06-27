@@ -21,7 +21,7 @@
 # Import standard python module
 import re
 
-def is_number(s):
+def _is_number(s):
     try:
         float(s)
         return True
@@ -40,7 +40,7 @@ def process_line(line):
         if re.search('Layer count:', tags[1]):
             tag, value = tags[1].split(':')
             value = value.strip()
-            if is_number(value):
+            if _is_number(value):
                 attrs['layer_count'] = value
         elif re.search('LAYER:', tags[1]):
             tag, value = tags[1].split(':')

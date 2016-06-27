@@ -30,22 +30,22 @@ class CommandParser:
                 self.gcs.resume()
                 
             elif cmd == '!z_plus':  #~ !z_plus:<float>
-                pass
+                self.gcs.z_modify(+float(args[1]))
                 
             elif cmd == '!z_minus': #~ !z_minus:<float>
-                pass
+                self.gcs.z_modify(-float(args[1]))
                 
             elif cmd == '!shutdown':#~ !shutdown:<on|off>
                 pass
                 
             elif cmd == '!speed':   #~ !speed:<float>
-                self.gcs.send('M S{0}'.format(args[1]), block=False)
+                self.gcs.send('M220 S{0}'.format(args[1]), block=False)
                 
             elif cmd == '!fan':     #~ !fan:<int>
                 self.gcs.send('M106 S{0}\r\n'.format(args[1]), block=False)
                 
             elif cmd == '!flow_rate':#~ !flow_rate:<float>
-                self.gcs.send('M S{0}\r\n', block=False)
+                self.gcs.send('M221 S{0}\r\n', block=False)
                 
             elif cmd == '!gcode':   #~ !gcode:<gcode>
                 self.gcs.send('{0}\r\n'.format(args[1]), block=False)

@@ -14,8 +14,8 @@ def callback_function(action, data):
 
 gcs = GCodeServiceClient()
 
-#reply = gcs.send('M728')
-#print reply
+reply = gcs.send('M105')
+print reply
 
 #~ reply = gcs.send('M119')
 #~ print reply

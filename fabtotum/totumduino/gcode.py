@@ -62,13 +62,27 @@ HOOKS = [
 
 class Command(object):
     
-    NONE   = 'none'
-    GCODE  = 'gcode'
-    FILE   = 'file'
-    ABORT  = 'abort'
-    PAUSE  = 'pause'
-    RESUME = 'resume'
-    KILL   = 'kill'
+    """
+    Command objects store individual commands sent to the ``GCodeService``. Along with the 
+    command id they contain all the necesary data to execute and handle it.
+    
+    
+    :param id: Command id can be ``NONE``, ``GCODE``, ``FILE``, ``ABORT``, ``PAUSE``, ``RESUME`` and ``ZMODIFY``
+    :param data: Any command data
+    :param expected_reply: Expected command reply
+    :param group: Aknowledge group. ``GCODE`` commands use `'gcode'` and ``FILE`` uses `'file'`
+    :type data: any
+    :type expected_reply: string
+    :type group: string
+    """    
+    NONE    = 'none'
+    GCODE   = 'gcode'
+    FILE    = 'file'
+    ABORT   = 'abort'
+    PAUSE   = 'pause'
+    RESUME  = 'resume'
+    ZMODIFY = 'zmodify'
+    KILL    = 'kill'
     
     def __init__(self, id, data = None, expected_reply = 'ok', group = 'raw'):
         self.id = id
@@ -95,43 +109,153 @@ class Command(object):
             return NotImplemented
     
     def notify(self):
+        """
+        Notify the waiting thread that the reply has been received.
+        """
         self.ev.set()
         
     def wait(self, timeout = None):
+        """
+        Wait for until a reply to this command is receiver or timeout expires.
+        
+        :param timeout: Time in seconds to wait until returning. If this parameter is omitted no timeout will be used.
+        :type timeout: float, None
+        """
         self.ev.wait(timeout)
         
     def hasExpectedReply(self, line):
+        """
+        Check whether **line** contains expected reply.
+        
+        :param line: Line to be checked
+        :type line: string
+        :returns:   ``True`` if **line** contains the expected reply, ``False`` otherwise
+        :rtype: bool
+        """
         return line[:len(self.expected_reply)] == self.expected_reply;
         
     def hasError(self, line):
+        """
+        Check whether a **line** contains an error.
+        
+        :param line: Line to be checked
+        :type line: string
+        :returns:   ``True`` if **line** contains an error, ``False`` otherwise
+        :rtype: bool
+        """
         return line[:5] == 'ERROR';
     
     @classmethod
     def abort(cls):
+        """ Constructor for ``ABORT`` command. """
         return cls(Command.ABORT, None)
 
     @classmethod
     def kill(cls):
+        """ Constructor for ``KILL`` command. """
         return cls(Command.KILL, None)
 
     @classmethod
     def pause(cls):
+        """ Constructor for ``PAUSE`` command. """
         return cls(Command.PAUSE, None)
 
     @classmethod
     def resume(cls):
+        """ Constructor for ``RESUME`` command. """
         return cls(Command.RESUME, None)
 
     @classmethod
     def gcode(cls, code, expected_reply = 'ok', group = 'gcode'):
+        """
+        Constructor for ``GCODE`` command.
+        
+        :param code: GCode
+        :param expected_reply: Expected reply
+        :param group: Acknowledge group. **Used internally**
+        :type code: string
+        :type expected_reply: string
+        :type group: string
+        """
         return cls(Command.GCODE, code, expected_reply, group)
 
     @classmethod
+    def zmodify(cls, z):
+        """
+        Constructor for ``ZMODIFY`` command.
+        
+        :param z: Amount by which to modify z axis.
+        :type z: float
+        """
+        return cls(Command.ZPLUS, z)
+
+    @classmethod
     def file(cls, filename):
+        """
+        Constructor for ``FILE`` command.
+        
+        :param filename: Filename of file to be pushed.
+        :type filename: string
+        """
         return cls(Command.FILE, filename, 'file')
 
 
 class GCodeService:
+    """This class docstring shows how to use sphinx and rst syntax
+
+    The first line is brief explanation, which may be completed with 
+    a longer one. For instance to discuss about its methods. The only
+    method here is :func:`function1`'s. The main idea is to document
+    the class and methods's arguments with 
+
+    - **parameters**, **types**, **return** and **return types**::
+
+          :param arg1: description
+          :param arg2: description
+          :type arg1: type description
+          :type arg1: type description
+          :return: return description
+          :rtype: the return type description
+
+    - and to provide sections such as **Example** using the double commas syntax::
+
+          :Example:
+
+          followed by a blank line !
+
+      which appears as follow:
+
+      :Example:
+
+      followed by a blank line
+
+    - Finally special sections such as **See Also**, **Warnings**, **Notes**
+      use the sphinx syntax (*paragraph directives*)::
+
+          .. seealso:: blabla
+          .. warnings also:: blabla
+          .. note:: blabla
+          .. todo:: blabla
+
+    .. note::
+        There are many other Info fields but they may be redundant:
+            * param, parameter, arg, argument, key, keyword: Description of a
+              parameter.
+            * type: Type of a parameter.
+            * raises, raise, except, exception: That (and when) a specific
+              exception is raised.
+            * var, ivar, cvar: Description of a variable.
+            * returns, return: Description of the return value.
+            * rtype: Return type.
+
+    .. note::
+        There are many other directives such as versionadded, versionchanged,
+        rubric, centered, ... See the sphinx documentation for more details.
+
+    Here below is the results of the :func:`function1` docstring.
+
+    """
+    
     __metaclass__ = Singleton
     
     IDLE        = 0
@@ -583,6 +707,12 @@ class GCodeService:
         has no effect.
         """
         self.cq.put( Command.abort() )
+    
+    def z_modify(self, z):
+        """
+        Modify the Z axis by amount z
+        """
+        self.cq.put( Command.zplus(z) )
     
     def register_callback(self, callback_name, callback_fun):
         """

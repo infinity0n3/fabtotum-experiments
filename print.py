@@ -55,14 +55,15 @@ command_file    = args.command_file # OVERRIDE DATA FILE
 task_id         = args.task_id      # TASK ID  
 monitor_file    = args.monitor      # TASK MONITOR FILE (write stats & task info, es: temperatures, speed, etc
 log_trace       = args.trace        # TASK TRACE FILE 
-ext_temp        = 0.0
 ext_temp_target = args.ext_temp     # EXTRUDER TARGET TEMPERATURE (previously read from file) 
-bed_temp        = 0.0
 bed_temp_target = args.bed_temp     # BED TARGET TEMPERATURE (previously read from file) 
 standalone      = args.standalone   # Standalong operation
 ################################################################################
 
 class PrintApplication(GCodePusher):
+    """
+    Additive print application.
+    """
     
     def __init__(self, log_trace, monitor_file, standalone = False):
         super(PrintApplication, self).__init__(log_trace, monitor_file)
@@ -87,9 +88,21 @@ class PrintApplication(GCodePusher):
     def temp_change_callback(self, action, data):
         print action, data
         
-    def run(self, gcode_file, task_id, ext_temp, ext_temp_target, bed_temp, bed_temp_target):
+    def run(self, gcode_file, task_id, ext_temp_target, bed_temp_target):
+        """
+        Run the print application.
         
-        self.prepare(gcode_file, task_id, ext_temp, ext_temp_target, bed_temp, bed_temp_target)
+        :param gcode_file: GCode file containing print commands.
+        :param task_id: Task ID
+        :param ext_temp_target: Pre-heat temperature for the extruder
+        :param bed_temp_target: Pre-heat temperature for the bed
+        :type gcode_file: string
+        :type task_id: int
+        :type ext_temp_target: float
+        :type bed_temp_target: float
+        """
+        
+        self.prepare(gcode_file, task_id, ext_temp_target, bed_temp_target)
         
         if self.standalone:
             general_macros.raise_bed(self)
@@ -100,21 +113,5 @@ class PrintApplication(GCodePusher):
 
 app = PrintApplication(log_trace, monitor_file, standalone)
 
-app.run(gcode_file, task_id, ext_temp, ext_temp_target, bed_temp, bed_temp_target)
+app.run(gcode_file, task_id, ext_temp_target, bed_temp_target)
 app.loop()
-
-
-#~ temperature_monitor = Thread( target=self.temperature_monitor_thread )
-#~ temperature_monitor.start()
-
-#~ event_handler = GCodePusherApplication.OverrideCommandsHandler(patterns=[command_file])
-#~ observer = Observer()
-#~ observer.schedule(event_handler, '/var/www/tasks/', recursive=True)
-#~ observer.start()
-
-
-
-
-#~ observer.stop()
-#temperature_monitor.join()
-#~ observer.join()

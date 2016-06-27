@@ -51,7 +51,7 @@ def parse_temperature(line):
 
 class GCodePusher(object):
     """
-    GCode pusher application.
+    GCode pusher.
     """
     
     def __init__(self, log_trace, monitor_file = None, gcs = None, use_callback = True):
@@ -171,16 +171,21 @@ class GCodePusher(object):
 
         return
     
-    ''' WRITE TO TRACE FILE '''
     def trace(self, log_msg):
+        """ 
+        Write to log message to trace file
+        
+        :param log_msg: Log message
+        :type log_msg: string
+        """
         logging.info(log_msg)
         
-    ''' RESET LOG TRACE to avoid annoing verbose '''
     def resetTrace(self):
+        """ Reset trace file """
         with open(self.trace_file, 'w'):
             pass
     
-    def shutdown_procedure(self):
+    def __shutdown_procedure(self):
         self.trace( _("Schutting down...") )
         
         # Wait for all commands to be finished
@@ -194,21 +199,43 @@ class GCodePusher(object):
         
         # TODO: trigger system shutdown
         
-    
     def first_move_callback(self):
         self.trace( _("Task Started") )
+    
+    def __first_move_callback(self):
+        """
+        Triggered when first move command in file executed
+        """
         
         self.monitor_lock.acquire()
         self.monitor_info['print_started'] = True
         self.monitor_lock.release()
+        
+        self.first_move_callback()
     
     def gcode_comment_callback(self, data):
+        """
+        Triggered when a comment in gcode file is detected
+        """
+        pass
+    
+    def __gcode_comment_callback(self, data):
+
         self.monitor_lock.acquire()
         if 'layer' in data:
             self.monitor_info['current_layer'] = data['layer']
         self.monitor_lock.release()
+        
+        self.gcode_comment_callback(data)
 
     def temp_change_callback(self, action, data):
+        """
+        Triggered when temperature change is detected
+        """
+        pass
+        
+    def __temp_change_callback(self, action, data):
+
         self.monitor_lock.acquire()
         
         if action == 'all':
@@ -226,8 +253,16 @@ class GCodePusher(object):
         
         self.writeMonitor()
         
+        self.temp_change_callback(action, data)
+    
     def gcode_action_callback(self, action, data):
-        
+        """
+        Triggered when action hook for a gcode command is activated 
+        """
+        pass
+                
+    def __gcode_action_callback(self, action, data):
+
         self.monitor_lock.acquire()
         
         if action == 'heating':
@@ -254,7 +289,13 @@ class GCodePusher(object):
                 self.trace( _("Fan off") )
             
         elif action == 'printing':
-            pass
+            
+            if data[0] == 'M220': # Speed factor
+                value = float( data[1] )
+                self.trace( _("Speed factor set to {0}%").format(value) )
+            elif data[0] == 'M221': # Extruder flow
+                value = float( data[1] )
+                self.trace( _("Extruder flow set to {0}%").format(value) )
             
         elif action == 'message':
             print "MSG: {0}".format(data)
@@ -262,14 +303,20 @@ class GCodePusher(object):
         self.monitor_lock.release()
         
         self.writeMonitor()
+        
+        self.gcode_action_callback(action, data)
 
     def file_done_callback(self):
+        """ Triggered when gcode file execution is completed """
         if self.monitor_info["auto_shutdown"]:
-            self.shutdown_procedure()
+            self.__shutdown_procedure()
         else:
             self._stop()
             
     def __file_done_callback(self, data):
+        """
+        Internal file done callback preventing user from overloading it.
+        """
         self.monitor_lock.acquire()
         
         self.monitor_info["completed_time"] = int(time.time())
@@ -282,6 +329,12 @@ class GCodePusher(object):
         self.file_done_callback()
     
     def state_change_callback(self, data):
+        """
+        Triggered when state is changed. (paused/resumed)
+        """
+        pass
+        
+    def __state_change_callback(self, data):
         self.monitor_lock.acquire()
         
         if data == 'paused':
@@ -293,6 +346,8 @@ class GCodePusher(object):
         self.monitor_lock.release()
         
         self.writeMonitor()
+        
+        self.state_change_callback(data)
     
     def progress_callback(self, percentage):
         pass
@@ -301,15 +356,15 @@ class GCodePusher(object):
         if action == 'file_done':
             self.__file_done_callback(data)
         elif action == 'gcode_comment':
-            self.gcode_comment_callback(data)
+            self.__gcode_comment_callback(data)
         elif action.startswith('gcode_action'):
-            self.gcode_action_callback(action.split(':')[1], data)
+            self.__gcode_action_callback(action.split(':')[1], data)
         elif action == 'first_move':
-            self.first_move_callback()
+            self.__first_move_callback()
         elif action.startswith('temp_change'):
-            self.temp_change_callback(action.split(':')[1], data)
+            self.__temp_change_callback(action.split(':')[1], data)
         elif action == 'state_change':
-            self.state_change_callback()
+            self.__state_change_callback()
 
     def progress_monitor_thread(self):
         old_progress = -1
@@ -322,12 +377,15 @@ class GCodePusher(object):
             if self.monitor_info["gcode_info"]:
                 if self.monitor_info["gcode_info"]["type"] == GCodeInfo.PRINT:
                     reply = self.gcs.send("M105")
-                    a, b, c, d = parse_temperature(reply[0])
                     self.monitor_lock.acquire()
-                    self.monitor_info['ext_temp'] = a
-                    self.monitor_info['ext_temp_target'] = b
-                    self.monitor_info['bed_temp'] = c
-                    self.monitor_info['bed_temp_target'] = d
+                    try:
+                        a, b, c, d = parse_temperature(reply[0])
+                        self.monitor_info['ext_temp'] = a
+                        self.monitor_info['ext_temp_target'] = b
+                        self.monitor_info['bed_temp'] = c
+                        self.monitor_info['bed_temp_target'] = d
+                    except Exception:
+                        pass
                     self.monitor_lock.release()
                     monitor_write = True
                 
@@ -344,33 +402,10 @@ class GCodePusher(object):
                 monitor_write = False
 
             time.sleep(2)
-            
-    #~ ''' WATCHDOG CLASS HANDLER FOR DATA FILE COMMAND '''
-    #~ class OverrideCommandsHandler(PatternMatchingEventHandler):
-        #~ backtrack = []
-        
-        #~ def catch_all(self, event, op):
-            #~ if event.is_directory:
-                #~ return
-                
-            #~ if(event.src_path == command_file):
-                #~ with open(event.src_path) as f:
-                    #~ for line in f:
-                        #~ c = line.rstrip()
-                        #~ if not c in ovr_cmd and c != "": 
-                            #~ ovr_cmd.append(c)
-                            #~ if c=="!kill":
-                                #~ killed=True
-                                #~ EOF=True
-                                
-                #~ open(event.src_path, 'w').close()
-                
-        #~ def on_modified(self, event):
-            #~ self.catch_all(event, 'MOD')
        
     def prepare(self, gcode_file, task_id,
-                    ext_temp = 0.0, ext_temp_target = 0.0,
-                    bed_temp = 0.0, bed_temp_target = 0.0,
+                    ext_temp_target = 0.0,
+                    bed_temp_target = 0.0,
                     rpm = 0):
         
         gfile = GCodeFile(gcode_file)
@@ -386,9 +421,9 @@ class GCodePusher(object):
         self.monitor_info["current_layer"] = 0
         self.monitor_info["filename"] = gcode_file
         self.monitor_info["task_id"] = task_id
-        self.monitor_info["ext_temp"] = ext_temp
+        #self.monitor_info["ext_temp"] = ext_temp
         self.monitor_info["ext_temp_target"] = ext_temp_target
-        self.monitor_info["bed_temp"] = bed_temp
+        #self.monitor_info["bed_temp"] = bed_temp
         self.monitor_info["bed_temp_target"] = bed_temp_target
         self.monitor_info["z_override"] = 0.0
         self.monitor_info["rpm"] = 0
@@ -400,8 +435,6 @@ class GCodePusher(object):
         self.monitor_info["current_line_number"] = 0
         self.monitor_info["gcode_info"] = gfile.info
         
-        #~ self.temperature_monitor = Thread( target=self.temperature_monitor_thread )
-        #~ self.temperature_monitor.start()
         if self.monitor_file:
             print "Creating monitor thread"
             
@@ -456,7 +489,15 @@ class GCodePusher(object):
         self.macro_warning = 0
         self.macro_error = 0
         self.macro_skipped = 0
+    
+    def macro_start(self):
+        pass
+        # self.atomic_begin()
         
+    def macro_end(self):
+        pass
+        # self.atomic_end()
+    
     def macro(self, code, expected_reply, timeout, error_msg, delay_after, warning=False, verbose=True):
         """
         """
@@ -482,37 +523,4 @@ class GCodePusher(object):
         
     def send_file(self, filename):
         self.gcs.send_file(filename)
-    
-#~ def main():
-    #~ config = ConfigService()
-
-    #~ # SETTING EXPECTED ARGUMENTS
-    #~ parser = argparse.ArgumentParser()
-    #~ parser.add_argument("file",         help="gcode file to execute")
-    #~ parser.add_argument("command_file", help="command file")
-    #~ parser.add_argument("task_id",      help="id_task")
-    #~ parser.add_argument("monitor",      help="monitor file",  default=config.get('general', 'task_monitor'), nargs='?')
-    #~ parser.add_argument("trace",        help="trace file",  default=config.get('general', 'trace'), nargs='?')
-    #~ parser.add_argument("--ext_temp",   help="extruder temperature (for UI feedback only)",  default=180, nargs='?')
-    #~ parser.add_argument("--bed_temp",   help="bed temperature (for UI feedback only)",  default=50,  nargs='?')
-
-    #~ # GET ARGUMENTS
-    #~ args = parser.parse_args()
-
-    #~ # INIT VARs
-    #~ gcode_file      = args.file         # GCODE FILE
-    #~ command_file    = args.command_file # OVERRIDE DATA FILE 
-    #~ task_id         = args.task_id      # TASK ID  
-    #~ monitor_file    = args.monitor      # TASK MONITOR FILE (write stats & task info, es: temperatures, speed, etc
-    #~ log_trace       = args.trace        # TASK TRACE FILE 
-    #~ ext_temp        = 0.0
-    #~ ext_temp_target = args.ext_temp     # EXTRUDER TARGET TEMPERATURE (previously read from file) 
-    #~ bed_temp        = 0.0
-    #~ bed_temp_target = args.bed_temp     # BED TARGET TEMPERATURE (previously read from file) 
-
-    #~ GCodePusherApplication(gcode_file, command_file, task_id, monitor_file, log_trace,
-                    #~ ext_temp, ext_temp_target, bed_temp, bed_temp_target)
-
-
-#~ if __name__ == "__main__":
-    #~ main()
+ 
