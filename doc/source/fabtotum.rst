@@ -9,7 +9,8 @@ fabtotum package
 Subpackages
 -----------
 
-.. toctree::
+.. toctree:: 
+    :maxdepth: 1
 
     fabtotum.debug
     fabtotum.fabui

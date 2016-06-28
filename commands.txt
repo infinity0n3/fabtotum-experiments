@@ -8,4 +8,5 @@
 !fan:<int>
 !flow_rate:<float>
 !gcode:<gcode>
-!file:<filename>
+!gmacro:<preset>,<arg1>,<arg2>,...
+!file:<filename>,<reply_filename>

@@ -33,13 +33,18 @@ from fabtotum.fabui.config              import ConfigService
 from fabtotum.totumduino.gcode          import GCodeService
 from fabtotum.utils.pyro.gcodeserver    import GCodeServiceServer
 from fabtotum.os.monitor.filesystem     import FolderTempMonitor
+from fabtotum.os.monitor.usbdrive       import UsbMonitor
+from fabtotum.os.monitor.gpiomonitor    import GPIOMonitor
 
 def signal_handler(signal, frame):
     print "You pressed Ctrl+C!"
     print "Shutting down services. Please wait..."
+    ws.close()
     gcserver.stop()
     gcservice.stop()
     observer.stop()
+    usbMonitor.stop()
+    gpioMonitor.stop()
 
 config = ConfigService()
 
@@ -62,6 +67,7 @@ USB_FILE            = config.get('usb', 'usb_file')
 ##################################################################
 SERIAL_PORT = config.get('serial', 'PORT')
 SERIAL_BAUD = config.get('serial', 'BAUD')
+GPIO_PIN    = config.get('gpio', 'pin')
 
 # Start gcode service
 gcservice = GCodeService(SERIAL_PORT, SERIAL_BAUD)
@@ -80,12 +86,14 @@ observer.schedule(ftm, TEMP_PATH, recursive=False)
 observer.start()
 
 ## usb disk monitor
-#~ um = UsbMonitor(ws)
-#~ usbObserver =  Observer()
-#~ usbObserver.schedule(um, '/dev/', recursive=False)
-#~ usbObserver.start()
+um = UsbMonitor(ws, gcservice, USB_FILE)
+usbMonitor =  Observer()
+usbMonitor.schedule(um, '/dev/', recursive=False)
+usbMonitor.start()
 
-# Safety monitor
+## Safety monitor
+gpioMonitor = GPIOMonitor(ws, gcservice, GPIO_PIN)
+gpioMonitor.start()
 
 # Ensure CTRL+C detection to gracefully stop the server.
 signal.signal(signal.SIGINT, signal_handler)
@@ -96,3 +104,5 @@ print "GCodeService stopped."
 gcservice.loop()
 print "Server stopped."
 observer.join()
+usbMonitor.join()
+gpioMonitor.join()

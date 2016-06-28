@@ -18,6 +18,9 @@
 # You should have received a copy of the GNU General Public License
 # along with FABUI.  If not, see <http://www.gnu.org/licenses/>.
 
+__authors__ = "Daniel Kesler"
+__license__ = "GPL - https://opensource.org/licenses/GPL-3.0"
+__version__ = "1.0"
 
 # Import standard python module
 import sys
@@ -42,6 +45,26 @@ from fabtotum.utils.pyro.gcodeclient import GCodeServiceClient
 # Set up message catalog access
 tr = gettext.translation('gpusher', 'locale', fallback=True)
 _ = tr.ugettext
+
+ERROR_MESSAGE = {
+    #error codes
+    'UNKNOWN_ERROR'             : _('',)
+    'NO_ERROR'                  : _('',)
+    'ERROR_KILLED'              : _('',)
+    'ERROR_STOPPED'             : _('',)
+    'ERROR_DOOR_OPEN'           : _('',)
+    'ERROR_MIN_TEMP'            : _('Extruder temperature below minimal.'),
+    'ERROR_MAX_TEMP'            : _('Extruder temperature above maximal.',)
+    'ERROR_MAX_BED_TEMP'        : _('Bed temperature above maximal.',)
+    'ERROR_X_MAX_ENDSTOP'       : _('X max end-stop triggered.',)
+    'ERROR_X_MIN_ENDSTOP'       : _('X min end-stop triggered.',)
+    'ERROR_Y_MAX_ENDSTOP'       : _('Y max end-stop triggered.',)
+    'ERROR_Y_MIN_ENDSTOP'       : _('Y min end-stop triggered.',)
+    'ERROR_IDLE_SAFETY'         : _('',)
+    #error codes for FABUI configurable functionalities
+    'ERROR_Y_BOTH_TRIGGERED'    : _(''),
+    'ERROR_Z_BOTH_TRIGGERED'    : _('')
+}
 
 ################################################################################
 def parse_temperature(line):
@@ -79,6 +102,8 @@ class GCodePusher(object):
             "bed_temp"              : 0.0,
             "bed_temp_target"       : 0.0,
             "z_override"            : 0.0,
+            "rpm"                   : 0.0,
+            "laser"                 : 0.0,
             "fan"                   : 0.0,    
             "speed"                 : 100.0,
             "flow_rate"             : 100.0,
@@ -122,6 +147,7 @@ class GCodePusher(object):
                     "bed_target"        : str(self.monitor_info['bed_temp_target'] ),
                     "z_override"        : str(self.monitor_info['z_override']),
                     "layers"            : str(self.monitor_info['layer_count']),
+                    "rpm"               : str(self.monitor_info['rpm']),
                     "fan"               : str(self.monitor_info['fan']),
                     "speed"             : str(self.monitor_info['speed']),
                     "flow_rate"         : str(self.monitor_info['flow_rate'])
@@ -263,6 +289,8 @@ class GCodePusher(object):
                 
     def __gcode_action_callback(self, action, data):
 
+        monitor_write = False
+
         self.monitor_lock.acquire()
         
         if action == 'heating':
@@ -270,39 +298,73 @@ class GCodePusher(object):
             if data[0] == 'M109':
                 self.trace( _("Wait for nozzle temperature to reach {0}&deg;C").format(data[1]) )
                 self.monitor_info['ext_temp_target'] = float(data[1])
+                monitor_write = True
             elif data[0] == 'M190':
                 self.trace( _("Wait for bed temperature to reach {0}&deg;C").format(data[1]) )
                 self.monitor_info['bed_temp_target'] = float(data[1])
+                monitor_write = True
             elif data[0] == 'M104':
                 self.trace( _("Nozzle temperature set to {0}&deg;C").format(data[1]) )
                 self.monitor_info['ext_temp_target'] = float(data[1])
+                monitor_write = True
             elif data[0] == 'M140':
                 self.trace( _("Bed temperature set to {0}&deg;C").format(data[1]) )
                 self.monitor_info['bed_temp_target'] = float(data[1])
+                monitor_write = True
             
         elif action == 'cooling':
             
             if data[0] == 'M106':
                 value = int((float( data[1] ) / 255) * 100)
                 self.trace( _("Fan value set to {0}%").format(value) )
+                self.monitor_info['fan'] = float(data[1])
+                monitor_write = True
             elif data[0] == 'M107':
                 self.trace( _("Fan off") )
-            
+                self.monitor_info['fan'] = 0.0
+                monitor_write = True
+                
         elif action == 'printing':
             
             if data[0] == 'M220': # Speed factor
                 value = float( data[1] )
                 self.trace( _("Speed factor set to {0}%").format(value) )
+                self.monitor_info['speed'] = float(data[1])
+                monitor_write = True
             elif data[0] == 'M221': # Extruder flow
                 value = float( data[1] )
                 self.trace( _("Extruder flow set to {0}%").format(value) )
-            
+                self.monitor_info['flow_rate'] = float(data[1])
+                monitor_write = True
+                
+        elif action == 'milling':
+            if data[0] == 'M0':
+                """ .. todo: do something with it """
+                pass
+            elif data[0] == 'M1':
+                """ .. todo: do something with it """
+                pass
+            elif data[0] == 'M3':
+                self.trace( _("Milling motor RPM set to {0}%").format(value) )
+                self.monitor_info['rpm'] = float(data[1])
+                monitor_write = True
+            elif data[0] == 'M4':
+                self.trace( _("Milling motor RPM set to {0}%").format(value) )
+                self.monitor_info['rpm'] = float(data[1])
+                monitor_write = True
+            elif data[0] == 'M6':
+                """ .. todo: Check whether laser power should be scaled from 0-255 to 0.0-100.0 """
+                self.trace( _("Laser power set to {0}%").format(value) )
+                self.monitor_info['laser'] = float(data[1])
+                monitor_write = True
+                
         elif action == 'message':
             print "MSG: {0}".format(data)
             
         self.monitor_lock.release()
         
-        self.writeMonitor()
+        if monitor_write:
+            self.writeMonitor()
         
         self.gcode_action_callback(action, data)
 
@@ -350,7 +412,29 @@ class GCodePusher(object):
         self.state_change_callback(data)
     
     def progress_callback(self, percentage):
+        """ 
+        Triggered when progress percentage changes 
+        
+        :param percentage: Progress percentage 0.0 to 100.0
+        :type percentage: float
+        """
         pass
+    
+    def error_callback(self, error_no, error_msg):
+        """ 
+        Triggered when an error occures.
+        
+        :param error_no: Error number
+        :param error_msg: Error message
+        :type error_no: int
+        :type error_msg: string
+        """
+        pass
+    
+    def __error_callback(self, error_no, error_msg):
+        # TODO: process errors
+        # TODO: complete ERROR_MESSAGE
+        self.error_callback(error_no, error_msg)
     
     def callback_handler(self, action, data):
         if action == 'file_done':
@@ -365,6 +449,8 @@ class GCodePusher(object):
             self.__temp_change_callback(action.split(':')[1], data)
         elif action == 'state_change':
             self.__state_change_callback()
+        elif action == 'error':
+            self.__error_callback(data[0], data[1])
 
     def progress_monitor_thread(self):
         old_progress = -1
@@ -407,6 +493,15 @@ class GCodePusher(object):
                     ext_temp_target = 0.0,
                     bed_temp_target = 0.0,
                     rpm = 0):
+        """
+        
+        
+        :param gcode_file:
+        :param task_id:
+        :param ext_temp_target:
+        :param bed_temp_target:
+        :param rpm:
+        """
         
         gfile = GCodeFile(gcode_file)
         
@@ -476,16 +571,11 @@ class GCodePusher(object):
         """
         stop_thread = Thread( target = self.__stop_thread )
         stop_thread.start()
-        
-    def send(self, code, expected_reply = 'ok', block = True, timeout = None, trace = None):
-        """
-        Send a single gcode command and display trace message.
-        """
-        if trace:
-            self.trace(trace)
-        return self.gcs.send(code, expected_reply, block, timeout)
-    
+            
     def reset_macro_status(self):
+        """
+        Reset macro status counters to zero.
+        """
         self.macro_warning = 0
         self.macro_error = 0
         self.macro_skipped = 0
@@ -500,12 +590,28 @@ class GCodePusher(object):
     
     def macro(self, code, expected_reply, timeout, error_msg, delay_after, warning=False, verbose=True):
         """
+        Send a command and check it's reply.
+        
+        :param code: gcode
+        :param expected_reply: Expected reply
+        :param error_msg: Error message to display
+        :param timeout: Reply timeout in seconds
+        :param delay_after: Time in seconds to wait after receiving the rely
+        :param warning: Treat wrong reply as warning not as error
+        :param verbose: Whether initial message should be displayed or not.
+        :type code: string
+        :type expected_reply: string
+        :type timeout: float
+        :type error_msg: string
+        :type delay_after: float
+        :type warning: bool
+        :type verbose: bool
         """
         if self.macro_error == 0:
             if verbose:
                 self.trace(error_msg)
             
-            reply = self.gcs.send(code)
+            reply = self.gcs.send(code, timeout=timeout, group = 'macro')
             if expected_reply:
                 # Check if the reply is as expected
                 if reply[0] != expected_reply:
@@ -521,6 +627,16 @@ class GCodePusher(object):
                 
         #time.sleep(delay_after) #wait the desired amount
         
+    def send(self, code, block = True, timeout = None, trace = None):
+        """
+        Send a single gcode command and display trace message.
+        """
+        if trace:
+            self.trace(trace)
+        return self.gcs.send(code, expected_reply, block, timeout)
+        
     def send_file(self, filename):
-        self.gcs.send_file(filename)
+        """
+        """
+        return self.gcs.send_file(filename)
  

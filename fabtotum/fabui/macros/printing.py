@@ -18,6 +18,10 @@
 # You should have received a copy of the GNU General Public License
 # along with FABUI.  If not, see <http://www.gnu.org/licenses/>.
 
+__authors__ = "Marco Rizzuto, Daniel Kesler"
+__license__ = "GPL - https://opensource.org/licenses/GPL-3.0"
+__version__ = "1.0"
+
 # Import standard python module
 import gettext
 
@@ -83,7 +87,7 @@ def check_pre_print(app, args = None):
     if safety_door == 1:
         app.macro("M741",   "TRIGGERED", 2, _("Front panel door control"), 0.1)
     app.macro("M744",       "TRIGGERED", 1, _("Building plane inserted correctly"), 0.1, warning=True)
-    app.macro("M744",       "TRIGGERED", 1, _("Spool panel control"), 0.1, warning=True)
+    app.macro("M742",       "TRIGGERED", 1, _("Spool panel control"), 0.1, warning=True)
 
 def engage_feeder(app, args = None):
     try:

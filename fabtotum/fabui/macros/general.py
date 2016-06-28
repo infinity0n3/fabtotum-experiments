@@ -18,7 +18,9 @@
 # You should have received a copy of the GNU General Public License
 # along with FABUI.  If not, see <http://www.gnu.org/licenses/>.
 
-__docformat__ = 'reStructuredText'
+__authors__ = "Marco Rizzuto, Daniel Kesler"
+__license__ = "GPL - https://opensource.org/licenses/GPL-3.0"
+__version__ = "1.0"
 
 # Import standard python module
 import gettext
@@ -138,6 +140,7 @@ def probe_up(app, args = None):
     app.macro("M402",   "ok", 1, _("Probe Up"), 0)
 
 def safe_zone(app, args = None):
+    """ .. todo: turn these into macroes """
     app.send("G91")
     app.send("G0 E-5 F1000")
     app.send("G0 Z+1 F1000")

@@ -44,7 +44,7 @@ parser.add_argument("monitor",      help="monitor file",  default=config.get('ge
 parser.add_argument("trace",        help="trace file",  default=config.get('general', 'trace'), nargs='?')
 parser.add_argument("--ext_temp",   help="extruder temperature (for UI feedback only)",  default=180, nargs='?')
 parser.add_argument("--bed_temp",   help="bed temperature (for UI feedback only)",  default=50,  nargs='?')
-parser.add_argument("--standalone",   help="call macros internally",  default=False, nargs='?')
+parser.add_argument("--standalone", help="call macros internally",  default=False, nargs='?')
 
 # GET ARGUMENTS
 args = parser.parse_args()

@@ -36,13 +36,13 @@ GCS = None
 
 class GCodeServiceServerPyroWrapper(object):
     def __init__(self, gcs):
-        print "New GCodeService Wrapper"
+        print "GCodeService PyroWrapper"
         self.gcs = gcs
         self.client_callback = None
         self.callback_list = []
     
-    def send(self, code, expected_reply = 'ok', block = True, timeout = None):
-        return self.gcs.send(code.encode('latin-1'), expected_reply.encode('latin-1'), block, timeout)
+    def send(self, code, block = True, timeout = None):
+        return self.gcs.send(code.encode('latin-1'), block, timeout)
         
     def send_file(self, filename):
         self.gcs.send_file(filename)

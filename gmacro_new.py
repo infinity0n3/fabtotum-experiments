@@ -85,7 +85,7 @@ class GMacroApplication(GCodePusher):
         if preset in PRESET_MAP:
             PRESET_MAP[preset](self, args)
         else:
-            print "Preset '{0}' not found".format(preset)
+            print _("Preset '{0}' not found").format(preset)
 
         if self.macro_error > 0:
             self.response("false")
