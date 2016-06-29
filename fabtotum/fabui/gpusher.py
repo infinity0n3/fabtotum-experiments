@@ -48,19 +48,19 @@ _ = tr.ugettext
 
 ERROR_MESSAGE = {
     #error codes
-    'UNKNOWN_ERROR'             : _('',)
-    'NO_ERROR'                  : _('',)
-    'ERROR_KILLED'              : _('',)
-    'ERROR_STOPPED'             : _('',)
-    'ERROR_DOOR_OPEN'           : _('',)
+    'UNKNOWN_ERROR'             : _(''),
+    'NO_ERROR'                  : _(''),
+    'ERROR_KILLED'              : _(''),
+    'ERROR_STOPPED'             : _(''),
+    'ERROR_DOOR_OPEN'           : _(''),
     'ERROR_MIN_TEMP'            : _('Extruder temperature below minimal.'),
-    'ERROR_MAX_TEMP'            : _('Extruder temperature above maximal.',)
-    'ERROR_MAX_BED_TEMP'        : _('Bed temperature above maximal.',)
-    'ERROR_X_MAX_ENDSTOP'       : _('X max end-stop triggered.',)
-    'ERROR_X_MIN_ENDSTOP'       : _('X min end-stop triggered.',)
-    'ERROR_Y_MAX_ENDSTOP'       : _('Y max end-stop triggered.',)
-    'ERROR_Y_MIN_ENDSTOP'       : _('Y min end-stop triggered.',)
-    'ERROR_IDLE_SAFETY'         : _('',)
+    'ERROR_MAX_TEMP'            : _('Extruder temperature above maximal.'),
+    'ERROR_MAX_BED_TEMP'        : _('Bed temperature above maximal.'),
+    'ERROR_X_MAX_ENDSTOP'       : _('X max end-stop triggered.'),
+    'ERROR_X_MIN_ENDSTOP'       : _('X min end-stop triggered.'),
+    'ERROR_Y_MAX_ENDSTOP'       : _('Y max end-stop triggered.'),
+    'ERROR_Y_MIN_ENDSTOP'       : _('Y min end-stop triggered.'),
+    'ERROR_IDLE_SAFETY'         : _(''),
     #error codes for FABUI configurable functionalities
     'ERROR_Y_BOTH_TRIGGERED'    : _(''),
     'ERROR_Z_BOTH_TRIGGERED'    : _('')
@@ -194,8 +194,6 @@ class GCodePusher(object):
         if self.monitor_file:
             with open(self.monitor_file,'w+') as file:
                 file.write(json.dumps(stats))
-
-        return
     
     def trace(self, log_msg):
         """ 
@@ -500,7 +498,7 @@ class GCodePusher(object):
         :param task_id:
         :param ext_temp_target:
         :param bed_temp_target:
-        :param rpm:
+        :param rpm: ???
         """
         
         gfile = GCodeFile(gcode_file)

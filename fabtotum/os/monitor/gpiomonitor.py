@@ -25,8 +25,6 @@ __version__ = "1.0"
 # Import standard python module
 import json
 import re
-import os
-import time
 import gettext
 
 # Import external modules
@@ -36,42 +34,69 @@ import RPi.GPIO as GPIO
 from fabtotum.fabui.config import ConfigService
 
 # Set up message catalog access
-tr = gettext.translation('usbdrive_monitor', 'locale', fallback=True)
+tr = gettext.translation('gpio_monitor', 'locale', fallback=True)
 _ = tr.ugettext
 
 class GPIOMonitor:
     
     ACTION_PIN = None
+    EMERGENCY_FILE = None
     
-    def __init__(self, WebSocket, gcs, action_pin):
+    def __init__(self, WebSocket, gcs, action_pin, emergency_file):
         self.ws = WebSocket
         self.gcs = gcs
         self.ACTION_PIN = int(action_pin)
+        self.EMERGENCY_FILE = emergency_file
         
     def gpioEventListener(self, chanel):
         """
         Triggered when a level change on a pin is detected.
         """
         print "====== START ============"
-        print 'GPIO STATUS: ', GPIO.input(chanel)
-        if GPIO.input(chanel) == 0 :
+        print 'GPIO STATUS: ', GPIO.input(self.ACTION_PIN)
+        if GPIO.input(self.ACTION_PIN) == 0 :
             reply = self.gcs.send("M730")
             
             if reply:
-                reply = reply[0]
+                if len(reply) > 1:
+                    search = re.search('ERROR\s:\s(\d+)', reply[0])
+                    if search != None:
+                        errorNumber = int(search.group(1))
+                        print "Error Number:", errorNumber
+                        self.manageErrorNumber(errorNumber)
+                    else:
+                        print "Unrecognized error: ", reply[0]
 
-            print "REPLY: ", reply
-            #~ search = re.search('ERROR\s:\s(\d+)', reply)
-            #~ if search != None:
-                #~ errorNumber = int(search.group(1))
-                #~ manageErrorNumber(errorNumber)
-            #~ else:
-                #~ print "Error number not recognized: ", reply
         GPIO_STATUS = GPIO.HIGH
-        print 'GPIO STATUS on EXIT: ', GPIO.input(chanel)
+        print 'GPIO STATUS on EXIT: ', GPIO.input(self.ACTION_PIN)
         print "====== EXIT ============"
 
+    def manageErrorNumber(self, error):
+        alertErrors = [110]
+        shutdownErros = [120, 121]
+        errorType = 'emergency'
+        
+        if error in shutdownErros:
+            print "shutdown"
+            # TODO: trigger shutdown
+            return None
+        elif error in alertErrors:
+            errorType = 'alert'
+            self.gcs.send('M999', block=False)
+        
+        message = {'type': errorType, 'code': error}
+        json_msg = json.dumps(message)
+        
+        # Send the emergency error via websocket
+        self.ws.send(json_msg)
+        
+        # If the browser doesn't support websockets write emgency error to a file
+        # so the UI can check it via pulling
+        with open(self.EMERGENCY_FILE, 'w+') as file:
+            file.write(json_msg)
+
     def start(self):
+        """ Start gpio event detection """
         # Setup BCM GPIO numbering
         GPIO.setmode(GPIO.BCM)                                          
         # Set GPIO as input (button)
@@ -80,8 +105,8 @@ class GPIOMonitor:
         GPIO.add_event_detect(self.ACTION_PIN, GPIO.BOTH, callback=self.gpioEventListener, bouncetime=100)
         
     def stop(self):
-        """ Clean-up """
-        GPIO.remove_event_detect(self.ACTION_PIN)
+        """ Place holder """
+        pass
         
     def join(self):
         """ Place holder """

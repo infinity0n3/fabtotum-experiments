@@ -35,6 +35,8 @@ import serial
 from fabtotum.utils.singleton import Singleton
 from fabtotum.utils.gcodefile import GCodeFile
 from fabtotum.totumduino.hooks import action_hook
+from fabtotum.totumduino.hardware import reset as totumduino_reset
+from fabtotum.totumduino.hardware import startup as totumduino_startup
 
 #############################################
 
@@ -281,9 +283,13 @@ class GCodeService:
     UNICODE_HANDLING = 'replace'
     
     REPLY_QUEUE_SIZE = 1
-    
-    def __init__(self, serial_port, serial_baud, serial_timeout = 5):
-        self.running = True
+        
+    def __init__(self, serial_port, serial_baud, serial_timeout = 5, use_checksum = False):
+        self.running = False
+        self.is_resetting = False
+        self.SERIAL_PORT = serial_port
+        self.SERIAL_BAUD = serial_baud
+        self.SERIAL_TIMEOUT = serial_timeout
         
         # Serial
         self.serial = serial.serial_for_url(
@@ -311,7 +317,7 @@ class GCodeService:
         self.total_line_number = 0
         
         # Note: experimental feature
-        self.use_checksum = False
+        self.use_checksum = use_checksum
         self.line_number = 0
         
         self.group_ack = {'gcode' : 0, 'file' : 0, 'gmacro' : 0}
@@ -328,7 +334,7 @@ class GCodeService:
         calling it must be done from a separate thread.
         """
         print "waiting for last_command", last_command
-        last_command.ev.wait()
+        last_command.wait()
         
         self.progress = 100.0
         
@@ -396,6 +402,7 @@ class GCodeService:
         
         print "<< ", gcode_complete[:-2]
         
+        #~ self.rq.put(gcode_command)
         self.serial.write(gcode_complete)
         self.rq.put(gcode_command)
         
@@ -411,7 +418,7 @@ class GCodeService:
         
         self.ev_tx_started.set()
         
-        while self.running:
+        while (self.running and self.serial.is_open):
             cmd = self.cq.get()
 
             if cmd == Command.GCODE:
@@ -530,7 +537,10 @@ class GCodeService:
         Process a one line of reply message.
         """
         
-        #print "__handle_line", line_raw, "[", self.active_cmd, "]"
+        print "__handle_line", line_raw, "[", self.active_cmd, self.rq.qsize(),  "]"
+        
+        if self.is_resetting:
+            return
         
         try:
             # The received packet is a bytearray so it has to be converted to a
@@ -554,13 +564,18 @@ class GCodeService:
         # If there is no active command try to get it from the reply queue
         if not self.active_cmd:
             try:
-                self.active_cmd = self.rq.get_nowait()
-                #print 'active-cmd:', self.active_cmd
+                if self.rq.qsize() > 0:
+                    #print "there is something, block until I get it."
+                    self.active_cmd = self.rq.get()
+                    #print "ok, I got it:", self.active_cmd
+                else:
+                    #print "there might be something, let's try."
+                    self.active_cmd = self.rq.get_nowait()
             except queue.Empty as e:
-                print "Reply queue is EMPTY, ignoring received reply."
-                #print "__handle_line: empty queue, nowhere to store reply"
-                return 
-        
+                #print "Reply queue is EMPTY, ignoring received reply."
+                print ">>", line
+                return
+         
         print "@ >>", line, self.active_cmd
         
         if self.active_cmd:
@@ -571,31 +586,33 @@ class GCodeService:
             if cmd.hasExpectedReply(line):
                 
                 
-                if cmd.reply[0][:5] == 'ERROR' and cmd.data[:4] != 'M730':
-                    msg,error_no = cmd.reply[0].split(':')
-                    error_no = error_no.strip()
-                    error_msg = 'UNKNOWN_ERROR: ' + str(cmd.reply[0])
+                #~ if cmd.reply[0][:5] == 'ERROR' and cmd.data[:4] != 'M730':
+                    #~ msg,error_no = cmd.reply[0].split(':')
+                    #~ error_no = error_no.strip()
+                    #~ error_msg = 'UNKNOWN_ERROR: ' + str(cmd.reply[0])
                     
-                    if error_no in ERROR_CODES:
-                        error_msg = ERROR_CODES[error_no]
-                    self.__trigger_callback('error', [error_no, error_msg] )
+                    #~ if error_no in ERROR_CODES:
+                        #~ error_msg = ERROR_CODES[error_no]
+                    #~ self.__trigger_callback('error', [error_no, error_msg] )
                                         
-                    print error_msg
+                    #~ print error_msg
                     #~ cmd.reply = []
                     
                 # TODO: should a command be resent?
                 if len(cmd.reply) > 1:
-                    if cmd.reply[-2].startswith("Resend:"): # Second to last line of reply
+                    if cmd.reply[-2].startswith("Resend:") and cmd.data[:4]: # Second to last line of reply
                         
                         resend, line_no = cmd.reply[-2].split(':')
                         
                         self.line_number = int(line_no) -1
                         
-                        print "Communication error. Need to resend command [{0}]".format(cmd.data)
+                        #print "Communication error. Need to resend command [{0}]".format(cmd.data)
                         print cmd.reply
-                        cmd.reply = None
                         
-                    
+                        if cmd.data[:4] != 'M999' and cmd.data[:4] != 'M998':
+                            cmd.reply = None
+                        
+                print "Notify:", cmd
                 cmd.notify()
                 
                 group = self.active_cmd.group
@@ -656,9 +673,11 @@ class GCodeService:
             print "has no cancel_read"
         
         self.ev_rx_started.set()
-        
-        while (self.running and self.serial.is_open) or self.wait_for_reply:
+
+        # Run this thread while the service is active        
+        while self.running and self.serial.is_open:
             
+            #while self.serial.is_open:
             try:
                 # read all that is there or wait for one byte (blocking)
                 data = self.serial.read(self.serial.in_waiting or 1)
@@ -678,6 +697,61 @@ class GCodeService:
         
         print "receiver thread: stopped"
     
+    def __reset_totumduino(self):
+        """ Does a hardware reset of the totumduino board. """
+        
+        self.is_resetting = True
+        
+        self.__cleanup()
+        
+        #self.serial.close()
+        
+        totumduino_reset()
+        time.sleep(1)
+        #self.serial.open()
+        
+        self.__cleanup()
+    
+        self.is_resetting = False
+        
+        time.sleep(1)
+        totumduino_startup(self)
+    
+    def __cleanup(self):
+        """
+        Internal function cleaning up queues and serial communication.
+        """
+        self.serial.flush()
+        self.serial.reset_input_buffer()
+        self.serial.reset_output_buffer()
+        
+        if self.active_cmd:
+            self.active_cmd.reply = None
+            self.active_cmd.notify()
+            self.active_cmd = None
+        
+        # Release all threads waiting for a reply (from reply queue)
+        while not self.rq.empty:
+            print "reply queue is not empty"
+            try:
+                cmd = self.rq.get_nowait()
+                cmd.notify()
+                #print "notifing ", cmd
+            except queue.Empty as e:
+                break
+        
+        # Release all threads waiting for a reply (from command queue)
+        while not self.cq.empty:
+            print "command queue is not empty"
+            try:
+                cmd = self.cq.get_nowait()
+                cmd.notify()
+                #print "notifing ", cmd
+            except queue.Empty as e:
+                break
+                
+
+        
     
     """ APIs *public* functions """
     
@@ -685,6 +759,9 @@ class GCodeService:
         """
         Start GCodeService threads.
         """
+        
+        self.running = True
+        
         # Sender Thread
         self.sender = Thread( target = self.__sender_thread )
         self.sender.start()
@@ -721,27 +798,9 @@ class GCodeService:
         # to allow the thread system to switch to other running threads
         time.sleep(1)
         
-        # Release all threads waiting for a reply (from reply queue)
-        while not self.rq.empty:
-            #print "reply queue is not empty"
-            try:
-                cmd = self.rq.get_nowait()
-                cmd.notify()
-                #print "notifing ", cmd
-            except queue.Empty as e:
-                print "reply queue is empty, exiting..."
-                break
+        self.__cleanup()
         
-        # Release all threads waiting for a reply (from command queue)
-        while not self.cq.empty:
-            #print "command queue is not empty"
-            try:
-                cmd = self.cq.get_nowait()
-                cmd.notify()
-                #print "notifing ", cmd
-            except queue.Empty as e:
-                print "command queue is empty, exiting..."
-                break
+        self.serial.close()
         
         print "All threads stopped"       
     
@@ -749,7 +808,7 @@ class GCodeService:
         """
         Force Totumduino hardware reset.
         """
-        pass
+        self.__reset_totumduino()
     
     def pause(self):
         """
@@ -850,7 +909,7 @@ class GCodeService:
             # In which case no one will trigger cmd.ev event to unlock it.
             # Timeout is a safety measure to handle this corner case.
             while not cmd.wait(3):
-                if not self.running and not self.wait_for_reply:
+                if not self.running:
                     # Aborting because the service has been stopped
                     print 'Aborting reply.'
                     return None

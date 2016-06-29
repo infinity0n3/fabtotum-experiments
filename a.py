@@ -18,7 +18,7 @@ gcs = GCodeServiceClient()
 #print gcs.send('M734')
 #print gcs.send('M730')
 
-print gcs.send('M105')
+print gcs.send('M756 E102')
 
 
 

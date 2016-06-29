@@ -92,7 +92,7 @@ usbMonitor.schedule(um, '/dev/', recursive=False)
 usbMonitor.start()
 
 ## Safety monitor
-gpioMonitor = GPIOMonitor(ws, gcservice, GPIO_PIN)
+gpioMonitor = GPIOMonitor(ws, gcservice, GPIO_PIN, EMERGENCY_FILE)
 gpioMonitor.start()
 
 # Ensure CTRL+C detection to gracefully stop the server.
